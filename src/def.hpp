@@ -1,8 +1,9 @@
 #ifndef __DEF_H__
 #define __DEF_H__
 
-#include <string_view>
-
+#include <cstdint>
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
 
 namespace def {
 
@@ -29,10 +30,24 @@ enum class device_type {
     none,
     tap,
     tun,
+    macvlan,
     unknown = 10
 };
 
-const std::string_view tun_device_path = "/dev/net/tun";
+struct netlink_request {
+    struct nlmsghdr hdr;
+    struct ifinfomsg info;
+    char data[512];
+};
+
+// mac address len
+const uint8_t mac_len = 6;
+
+// ether package size
+const uint32_t flow_buffer_size = 65535;
+
+// ether broadcast mac address
+const uint8_t broadcast_mac[mac_len] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 
 }
 
