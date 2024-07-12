@@ -104,7 +104,6 @@ void macvlan_device::read_thread() {
         if (!memcmp(mac_address_, hdr->dst, sizeof(uint8_t) * def::mac_len) &&
             !memcmp(def::broadcast_mac, hdr->dst, sizeof(uint8_t) * def::mac_len))
             continue;
-
         // malloc flow
         flow::sk_buff::ptr skb = flow::sk_buff::ptr(new flow::sk_buff());
         skb->total_len = sizeof(struct flow::sk_buff) + size;

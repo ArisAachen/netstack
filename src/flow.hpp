@@ -68,9 +68,7 @@ struct sk_buff {
         return data.c_str() + data_begin;
     }
     
-    virtual ~sk_buff() {
-        std::cout << "skb free" << std::endl;
-    }
+    virtual ~sk_buff() {}
 };
 
 /**
@@ -151,7 +149,7 @@ struct ether_hr {
     uint8_t src[6];
     /// next layer protocol
     uint16_t protocol;
-};
+} __attribute__((packed));
 
 
 /**
@@ -174,12 +172,12 @@ struct arp_hdr {
     /// src mac address
     uint8_t src_mac[def::mac_len];
     /// src ip address
-    uint16_t src_ip;
+    uint32_t src_ip;
     /// dst mac address
     uint8_t dst_mac[def::mac_len];
     /// dst ip address
-    uint16_t dst_ip;
-};
+    uint32_t dst_ip;
+} __attribute__((packed));
 
 
 /**
