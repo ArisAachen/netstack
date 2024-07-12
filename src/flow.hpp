@@ -7,7 +7,9 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <memory>
+#include <string>
 
 namespace flow {
 
@@ -48,21 +50,26 @@ struct sk_buff {
     uint16_t protocol;
 
     /// data 
-    char data[0];
+    std::string data;
 
     // save data to buffer
     void store_data(char* buf, size_t size) {
-        memccpy(data + data_tail, buf, 0, size);
+        data.append(buf, size);
+        data_tail += size;
     }
 
     /**
      * @brief get data
      * @return data or nullptr
      */    
-    char* get_data() {
+    const char* get_data() const {
         if (data_len == 0)
             return nullptr;
-        return data + data_begin;
+        return data.c_str() + data_begin;
+    }
+    
+    virtual ~sk_buff() {
+        std::cout << "skb free" << std::endl;
     }
 };
 

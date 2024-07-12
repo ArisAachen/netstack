@@ -14,7 +14,7 @@ namespace generic {
  * @param[in] src_mac source mac address
  * @return format mac address
  */
-std::string format_mac_address(uint8_t* src_mac);
+std::string format_mac_address(const uint8_t* src_mac);
 
 /**
  * @brief convert mac back

@@ -29,7 +29,7 @@ namespace utils {
 namespace generic {
 
 // format mac address
-std::string format_mac_address(uint8_t* src_mac) {
+std::string format_mac_address(const uint8_t* src_mac) {
     std::stringstream ss;
     // use hex format
     ss << std::hex << std::setfill('0');

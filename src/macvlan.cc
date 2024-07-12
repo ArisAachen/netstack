@@ -25,8 +25,6 @@ namespace driver {
 
 macvlan_device::macvlan_device(const std::string& dev_name, const std::string& ip_address, const std::string& mac_address)
     : dev_name_(dev_name), ip_address_(ip_address), status_(def::device_status::down) {
-    write_head_ = flow::sk_head::ptr(new flow::sk_head());
-    read_head_ = flow::sk_head::ptr(new flow::sk_head());
     utils::generic::convert_string_to_mac(mac_address, mac_address_);
 }
 
@@ -73,15 +71,17 @@ bool macvlan_device::down() {
 flow::sk_buff::ptr macvlan_device::read_from_device() {
     // unique lock
     std::unique_lock<std::mutex> lock(read_mutex_);
-    read_cond_.wait(lock, [this] { return !this->read_head_->empty(); });
+    read_cond_.wait(lock, [this] { return !this->read_head_.empty(); });
     // get buffer
-    return read_head_->pop();
+    auto buffer = read_head_.front();
+    read_head_.pop();
+    return buffer;
 }
 
 // write buffer to device
 int macvlan_device::write_to_device(flow::sk_buff::ptr buffer) {
     std::unique_lock<std::mutex> lock(write_mutex_);
-    write_head_->append(buffer);
+    write_head_.push(buffer);
     write_cond_.notify_one();
     return 0;
 }
@@ -99,24 +99,22 @@ void macvlan_device::read_thread() {
             std::cout << "read macvlan buffer end" << std::endl;
         }
         // get ether mac 
-        flow::ether_hr* hdr = reinterpret_cast<flow::ether_hr*>(buf);
+        const flow::ether_hr* hdr = reinterpret_cast<const flow::ether_hr*>(buf);
         // check if should ignore
         if (!memcmp(mac_address_, hdr->dst, sizeof(uint8_t) * def::mac_len) &&
             !memcmp(def::broadcast_mac, hdr->dst, sizeof(uint8_t) * def::mac_len))
             continue;
 
         // malloc flow
-        flow::sk_buff::ptr skb = flow::sk_buff::ptr((flow::sk_buff*)malloc(sizeof(struct flow::sk_buff) + size));
+        flow::sk_buff::ptr skb = flow::sk_buff::ptr(new flow::sk_buff());
         skb->total_len = sizeof(struct flow::sk_buff) + size;
         skb->data_len = size;
         skb->protocol = htons(hdr->protocol);
         skb->store_data(buf, size);
-        flow::skb_put(skb, size);
         flow::skb_pull(skb, sizeof(struct flow::ether_hr));
         // push to queue
         std::lock_guard<std::mutex> lock(read_mutex_);
-        read_head_->append(skb);
-
+        read_head_.push(skb);
         std::cout << utils::generic::format_mac_address(hdr->src) << " -> " 
             << utils::generic::format_mac_address(hdr->dst) << ", protocol: " << std::hex << (int)skb->protocol << std::endl;
         read_cond_.notify_one();

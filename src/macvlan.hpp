@@ -8,6 +8,8 @@
 
 #include <condition_variable>
 #include <cstdint>
+#include <list>
+#include <queue>
 #include <string>
 #include <thread>
 #include <vector>
@@ -101,13 +103,13 @@ private:
     /// macvlan_device device mtu
     uint16_t mtu_;
     /// read buffer head
-    flow::sk_head::ptr read_head_;
+    std::queue<flow::sk_buff::ptr> read_head_;
     /// read share mutex
     std::mutex read_mutex_;
     /// read share condition
     std::condition_variable read_cond_;
     /// write buffer head
-    flow::sk_head::ptr write_head_;
+    std::queue<flow::sk_buff::ptr> write_head_;
     /// write share mutex
     std::mutex write_mutex_;
     /// write share condition

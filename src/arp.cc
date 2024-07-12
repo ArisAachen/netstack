@@ -16,7 +16,7 @@ bool arp::pack_flow(flow::sk_buff::ptr buffer) {
 // unpack flow
 bool arp::unpack_flow(flow::sk_buff::ptr buffer) {
     // get arp header
-    flow::arp_hdr* hdr = reinterpret_cast<flow::arp_hdr*>(buffer->get_data());
+    auto hdr = reinterpret_cast<const flow::arp_hdr*>(buffer->get_data());
     if (hdr == nullptr) 
         return false;
     std::cout << "arp buffer" << std::hex << buffer->get_data() << std::endl;
@@ -37,7 +37,7 @@ bool arp::unpack_flow(flow::sk_buff::ptr buffer) {
 
 // handle arp request
 bool arp::handle_arp_request(flow::sk_buff::ptr buffer) {
-    flow::arp_hdr* hdr = reinterpret_cast<flow::arp_hdr*>(buffer->get_data());
+    auto hdr = reinterpret_cast<const flow::arp_hdr*>(buffer->get_data());
     // check target ip 
     if (htonl(hdr->dst_ip) != def::global_def_ip) {
         std::cout << "arp request target is not local" << std::endl;
