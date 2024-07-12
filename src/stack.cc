@@ -1,5 +1,10 @@
 #include "stack.hpp"
+#include "arp.hpp"
+#include "def.hpp"
 #include "macvlan.hpp"
+
+#include <iostream>
+#include <utility>
 
 namespace stack {
 
@@ -12,6 +17,7 @@ stack::ptr stack::get_instance() {
 stack::stack() {
     // register macvlan device
     register_device(0, driver::macvlan_device::ptr(new driver::macvlan_device("new_eth0", "", "f6:34:95:26:90:66")));
+    register_network_handler(def::network_protocol::arp, protocol::arp::ptr(new protocol::arp()));
 }
 
 void stack::write_to_device(flow::sk_buff::ptr buffer, uint8_t device_id) {
@@ -24,8 +30,8 @@ void stack::write_to_device(flow::sk_buff::ptr buffer, uint8_t device_id) {
 }
 
 void stack::run() {
+    handle_packege();
     run_read_device();
-    // handle_packege();
 }
 
 void stack::run_read_device() {
@@ -47,11 +53,24 @@ void stack::handle_packege() {
                 auto buffer = device.second->read_from_device();
                 if (buffer == nullptr)
                     continue;
-                
+                // search handle 
+                handle_network_package(buffer);
             }
         });
-        // thread_vec_.push_back(thread);
+        thread_vec_.push_back(std::move(thread));
     }
+}
+
+// handle network package
+void stack::handle_network_package(flow::sk_buff::ptr buffer) {
+    // get network handler
+    auto handler = network_handler_map_.find(def::network_protocol(buffer->protocol));
+    if (handler == network_handler_map_.end()) {
+        std::cout << "recv unknown network protocol flow" << std::endl;
+        return;
+    }
+    // handle flow
+    handler->second->unpack_flow(buffer);
 }
 
 stack::~stack() {

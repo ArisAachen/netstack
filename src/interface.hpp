@@ -63,15 +63,22 @@ public:
     virtual bool user_device_status() = 0;
 };
 
-
 struct network_handler {
     typedef std::shared_ptr<network_handler> ptr;
 
     /**
-     * @brief create net_device device
-     * @param[in] name net_device device name
-     * @return net_device::ptr net_device device
-     */
+     * @brief package flow
+     * @param[in] skb sk buffer
+     * @return return if package is valid, like checksum failed
+     */    
+    virtual bool pack_flow(flow::sk_buff::ptr skb) = 0;
+
+    /**
+     * @brief unpackage flow
+     * @param[in] skb sk buffer
+     * @return return if package is valid, like checksum failed
+     */        
+    virtual bool unpack_flow(flow::sk_buff::ptr skb) = 0;
 };
 
 }

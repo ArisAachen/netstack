@@ -5,9 +5,12 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <memory>
 
 namespace flow {
+
 
 /**
  * @file flow.hpp
@@ -27,14 +30,14 @@ struct sk_buff {
     uint64_t data_len;
 
     /// block head
-    uint16_t head;
-    // block tail
-    uint16_t tail;
+    uint16_t block_head;
+    // block end
+    uint16_t block_end;
 
     /// data begin
-    uint16_t begin;
-    /// data end
-    uint16_t end;
+    uint16_t data_begin;
+    /// data tail
+    uint16_t data_tail;
 
     /// pre buffer elem
     sk_buff::weak_ptr pre;
@@ -42,10 +45,25 @@ struct sk_buff {
     sk_buff::ptr next;
     
     /// next layer protocol
-    uint8_t protocol;
+    uint16_t protocol;
 
     /// data 
     char data[0];
+
+    // save data to buffer
+    void store_data(char* buf, size_t size) {
+        memccpy(data + data_tail, buf, 0, size);
+    }
+
+    /**
+     * @brief get data
+     * @return data or nullptr
+     */    
+    char* get_data() {
+        if (data_len == 0)
+            return nullptr;
+        return data + data_begin;
+    }
 };
 
 /**
@@ -102,6 +120,7 @@ public:
         return head == nullptr;
     }
 
+
 private:
     /// sk buff head
     sk_buff::ptr head;
@@ -157,19 +176,51 @@ struct arp_hdr {
 
 
 /**
- * @brief push buffer data
+ * @brief push buffer begin
  * @param[in] buffer buffer
  * @param[in] device device
  */
-void skb_push(sk_buff::ptr buffer, size_t offset);
+static void skb_push(sk_buff::ptr buffer, size_t offset) {
+    buffer->data_begin -= offset;
+}
 
+/**
+ * @brief put buffer data end
+ * @param[in] buffer buffer
+ * @param[in] offset offset
+ */
+static void skb_put(sk_buff::ptr buffer, size_t offset) {
+    buffer->data_tail += offset;
+}
 
-void skb_put(sk_buff::ptr, size_t offset);
+/**
+ * @brief pull buffer data head
+ * @param[in] buffer buffer
+ * @param[in] offset offset
+ */
+static void skb_pull(sk_buff::ptr buffer, size_t offset) {
+    buffer->data_begin += offset;
+}
 
+/**
+ * @brief reserve buffer data begin and end
+ * @param[in] buffer buffer
+ * @param[in] offset offset
+ */
+static void skb_reserve(sk_buff::ptr buffer, size_t offset) {
+    buffer->data_begin += offset;
+    buffer->data_tail += offset;
+}
 
-void skb_pull(sk_buff::ptr, size_t offset);
+/**
+ * @brief release buffer
+ * @param[in] buffer buffer
+ */
+static void skb_release(sk_buff::ptr buffer) {
+    buffer.reset();
+    return;
+} 
 
-void skb_reserve(sk_buff::ptr, size_t offset);
 }
 
 

@@ -3,7 +3,6 @@
 #include "flow.hpp"
 #include "utils.hpp"
 
-#include <algorithm>
 #include <cassert>
 #include <cerrno>
 #include <cstdint>
@@ -13,7 +12,6 @@
 
 
 #include <mutex>
-#include <pstl/glue_algorithm_defs.h>
 #include <string>
 #include <unistd.h>
 #include <net/if.h>
@@ -107,18 +105,20 @@ void macvlan_device::read_thread() {
             !memcmp(def::broadcast_mac, hdr->dst, sizeof(uint8_t) * def::mac_len))
             continue;
 
-        std::cout << utils::generic::format_mac_address(hdr->src) << " -> " 
-            << utils::generic::format_mac_address(hdr->dst) << std::endl;
-
-        // create sk buffer
-        int total_len = sizeof(struct flow::sk_buff) + size;
-        flow::sk_buff* buffer = (flow::sk_buff *)malloc(total_len);
-        buffer->total_len = total_len;
-        buffer->data_len = size;
-        memccpy(buffer->data, buf, 0, size);
+        // malloc flow
+        flow::sk_buff::ptr skb = flow::sk_buff::ptr((flow::sk_buff*)malloc(sizeof(struct flow::sk_buff) + size));
+        skb->total_len = sizeof(struct flow::sk_buff) + size;
+        skb->data_len = size;
+        skb->protocol = htons(hdr->protocol);
+        skb->store_data(buf, size);
+        flow::skb_put(skb, size);
+        flow::skb_pull(skb, sizeof(struct flow::ether_hr));
         // push to queue
         std::lock_guard<std::mutex> lock(read_mutex_);
-        read_head_->append(flow::sk_buff::ptr(buffer));
+        read_head_->append(skb);
+
+        std::cout << utils::generic::format_mac_address(hdr->src) << " -> " 
+            << utils::generic::format_mac_address(hdr->dst) << ", protocol: " << std::hex << (int)skb->protocol << std::endl;
         read_cond_.notify_one();
     }
 }

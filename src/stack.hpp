@@ -2,6 +2,7 @@
 #define __STACK_H__
 
 
+#include "def.hpp"
 #include "interface.hpp"
 
 #include <cstdint>
@@ -43,7 +44,7 @@ public:
      * @param[in] device_id device id
      * @param[in] handler network handler
      */
-    void register_network_handler(uint8_t handler_id, interface::network_handler::ptr handler) {
+    void register_network_handler(def::network_protocol handler_id, interface::network_handler::ptr handler) {
         network_handler_map_.insert(std::make_pair(handler_id, handler));
     }
 
@@ -85,11 +86,11 @@ private:
      * @param[in] protocol ether protocol
      * @param[in] buffer buffer remove ether header
      */
-    void handle_network_package(uint8_t protocol, flow::sk_buff::ptr buffer);
+    void handle_network_package(flow::sk_buff::ptr buffer);
 
 private:
     /// network handler map
-    std::unordered_map<uint8_t, interface::network_handler::ptr> network_handler_map_;
+    std::unordered_map<def::network_protocol, interface::network_handler::ptr> network_handler_map_;
     /// device map
     std::unordered_map<uint8_t, interface::net_device::ptr> device_map_;
     /// thread vector
