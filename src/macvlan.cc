@@ -24,8 +24,14 @@
 namespace driver {
 
 macvlan_device::macvlan_device(const std::string& dev_name, const std::string& ip_address, const std::string& mac_address)
-    : dev_name_(dev_name), ip_address_(ip_address), status_(def::device_status::down) {
+    : dev_name_(dev_name), status_(def::device_status::down) {
     utils::generic::convert_string_to_mac(mac_address, mac_address_);
+    utils::generic::convert_string_to_ip(ip_address, &ip_address_);
+    // get ifindex by device name
+    if_index_ = if_nametoindex(dev_name_.c_str());
+    if (if_index_ == 0) {
+        std::cout << "get macvlan ifindex failed, err: " << std::strerror(errno) << std::endl;
+    }
 }
 
 macvlan_device::~macvlan_device() {
@@ -33,12 +39,6 @@ macvlan_device::~macvlan_device() {
 }
 
 bool macvlan_device::up() {
-    // get ifindex by device name
-    int ifindex = if_nametoindex(dev_name_.c_str());
-    if (ifindex == 0) {
-        std::cout << "get macvlan ifindex failed, err: " << std::strerror(errno) << std::endl;
-        return false;
-    }
     // connect to socket
     macvlan_fd_ = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
     if (macvlan_fd_ < 0) {
@@ -49,7 +49,7 @@ bool macvlan_device::up() {
     struct sockaddr_ll source_link;
     memset(&source_link, 0, sizeof(struct sockaddr_ll));
     source_link.sll_family = AF_PACKET;
-    source_link.sll_ifindex = ifindex;
+    source_link.sll_ifindex = if_index_;
     source_link.sll_protocol = htons(ETH_P_ALL);
     // bind socket to device
     if (bind(macvlan_fd_, (struct sockaddr*)&source_link, sizeof(struct sockaddr_ll)) < 0) {
@@ -57,7 +57,8 @@ bool macvlan_device::up() {
         return false;
     }
     std::cout << "up macvlan device success, device name: " << dev_name_ << ", ifindex: " << ifindex 
-        << ", mac: " << std::hex << utils::generic::format_mac_address(mac_address_) << std::endl;
+        << ", mac: " << std::hex << utils::generic::format_mac_address(mac_address_) 
+        << ", ip: " << utils::generic::format_ip_address(ip_address_) << std::endl;
     return true;
 }
 
@@ -86,6 +87,21 @@ int macvlan_device::write_to_device(flow::sk_buff::ptr buffer) {
     return 0;
 }
 
+// get macvlan device mac
+uint8_t* macvlan_device::get_device_mac() {
+    return mac_address_;
+}
+
+// get macvlan device ip
+uint32_t macvlan_device::get_device_ip() {
+    return ip_address_;
+}
+
+// get device index
+uint8_t macvlan_device::get_device_ifindex() {
+    return if_index_;
+}
+
 void macvlan_device::read_thread() {
     // check if fd is valid
     assert(macvlan_fd_ != 0);
@@ -109,6 +125,7 @@ void macvlan_device::read_thread() {
         skb->total_len = sizeof(struct flow::sk_buff) + size;
         skb->data_len = size;
         skb->protocol = htons(hdr->protocol);
+        skb->dev = weak_from_this();
         skb->store_data(buf, size);
         flow::skb_pull(skb, sizeof(struct flow::ether_hr));
         // push to queue
@@ -120,19 +137,19 @@ void macvlan_device::read_thread() {
     }
 }
 
+
+// write buffer to device
 void macvlan_device::write_thread() {
-    // check if fd is valid
-    assert(macvlan_fd_ != 0);
-    char buf[512] = "Hello macvlan";
+    // init write buffer
+    flow::sk_buff::ptr buffer = nullptr;
     while (true) {
-        size_t size = write(macvlan_fd_, buf, 512);
-        if (size < 0) {
-            std::cout << "write macvlan buffer failed" << std::endl;
-            break;
-        } else if (size == 0) {
-            std::cout << "write macvlan buffer end" << std::endl;
-        } 
-        std::cout << "write macvlan buffer, buf: " << std::endl;
+        {
+            std::unique_lock<std::mutex> lock(write_mutex_);
+            write_cond_.wait(lock, [&] () { return !write_head_.empty(); });
+            buffer = write_head_.front();
+            write_head_.pop();
+        }
+
     }
 }
 

@@ -8,7 +8,6 @@
 
 #include <condition_variable>
 #include <cstdint>
-#include <list>
 #include <queue>
 #include <string>
 #include <thread>
@@ -63,6 +62,23 @@ public:
      */
     virtual int write_to_device(flow::sk_buff::ptr buffer);
 
+    /**
+     * @brief get net_device mac
+     * @return device mac
+     */
+    virtual uint8_t* get_device_mac();
+
+    /**
+     * @brief get net_device ip
+     * @return device ip
+     */
+    virtual uint32_t get_device_ip();
+
+    /**
+     * @brief get net_device ifindex
+     * @return device ifindex
+     */
+    virtual uint8_t get_device_ifindex();
 
 public:
     /**
@@ -93,9 +109,11 @@ private:
     /// device name
     std::string dev_name_;
     /// device address
-    std::string ip_address_;
+    uint32_t ip_address_;
     /// device mac 
     uint8_t mac_address_[def::mac_len];
+    /// device index
+    uint8_t if_index_;
     /// thread to read and write 
     std::vector<std::thread> thread_vec_;
     /// macvlan_device device fd

@@ -2,15 +2,18 @@
 #include "def.hpp"
 
 #include <algorithm>
+#include <arpa/inet.h>
 #include <cstdint>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <netinet/in.h>
 #include <pstl/glue_algorithm_defs.h>
 #include <sstream>
 #include <optional>
 
 #include <fcntl.h>
+#include <string>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -43,6 +46,19 @@ std::string format_mac_address(const uint8_t* src_mac) {
     return ss.str();
 }
 
+// format ip address
+std::string format_ip_address(const uint32_t src_ip) {
+    std::stringstream ss;
+    for (int index = 0; index < 4; index++) {
+        uint8_t num = src_ip >> (8 * (4 - index -1));
+        if (index == 0)
+            ss << std::to_string(num);
+        else
+            ss << "." << std::to_string(num);
+    }
+    return ss.str();
+}
+
 // convert string to mac
 bool convert_string_to_mac(const std::string& src_mac, uint8_t* dst_mac) {
     std::istringstream iss(src_mac);
@@ -52,6 +68,19 @@ bool convert_string_to_mac(const std::string& src_mac, uint8_t* dst_mac) {
     while (std::getline(iss, byte_str, ':') && i < 6) {
         dst_mac[i] = static_cast<uint8_t>(std::stoi(byte_str, nullptr, 16));
         ++i;
+    }
+    return true;
+}
+
+// convert string to ip
+bool convert_string_to_ip(const std::string& src_ip, uint32_t* dst_ip) {
+    std::stringstream iss(src_ip);
+    std::string byte_str;
+    int i = 0;
+    while (std::getline(iss, byte_str, '.') && i < 4) {
+        uint8_t num = static_cast<uint8_t>(std::stoi(byte_str));
+        *dst_ip += num << (8 * (4 - i - 1));
+        i++;
     }
     return true;
 }

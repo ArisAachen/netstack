@@ -1,6 +1,7 @@
 #ifndef __ARP_H__
 #define __ARP_H__
 
+#include "def.hpp"
 #include "flow.hpp"
 #include "interface.hpp"
 
@@ -26,6 +27,13 @@ public:
      */
     virtual ~arp() {}
 
+
+    /**
+     * @brief package protocol
+     * @return return network layer protocol
+     */    
+    virtual def::network_protocol get_protocol();
+
     /**
      * @brief package flow
      * @param[in] skb sk buffer
@@ -40,7 +48,6 @@ public:
      * @return return if package is valid, like checksum failed
      */    
     virtual bool unpack_flow(flow::sk_buff::ptr buffer);
-
 
 private:
     /**

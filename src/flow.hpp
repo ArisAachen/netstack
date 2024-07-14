@@ -11,8 +11,13 @@
 #include <memory>
 #include <string>
 
-namespace flow {
+// pre define interface
+namespace interface {
+    struct net_device;
+    class stack;
+}
 
+namespace flow {
 
 /**
  * @file flow.hpp
@@ -49,6 +54,18 @@ struct sk_buff {
     /// next layer protocol
     uint16_t protocol;
 
+    /// write dst 
+    union {
+        uint32_t ip_address;
+        uint8_t mac_address[def::mac_len];
+    } dst;
+
+    /// recv netdevice 
+    std::weak_ptr<interface::net_device> dev;
+
+    /// stack 
+    std::weak_ptr<interface::stack> stack;
+
     /// data 
     std::string data;
 
@@ -67,7 +84,10 @@ struct sk_buff {
             return nullptr;
         return data.c_str() + data_begin;
     }
-    
+
+    /**
+     * @brief release buff
+     */  
     virtual ~sk_buff() {}
 };
 

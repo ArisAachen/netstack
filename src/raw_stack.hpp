@@ -15,37 +15,35 @@ namespace stack {
 
 
 /**
- * @file stack.hpp
- * @brief stack protocol stack, include tcp/ip, arp, icmp, etc
+ * @file raw_stack.hpp
+ * @brief raw_stack protocol raw_stack, include tcp/ip, arp, icmp, etc
  * @author ArisAachen
  * @copyright Copyright (c) 2024 aris All rights reserved
  */
-class stack {
+class raw_stack : public interface::stack, public std::enable_shared_from_this<raw_stack> {
 public:
-    typedef std::shared_ptr<stack> ptr;
+    typedef std::shared_ptr<raw_stack> ptr;
 
     /**
-     * @brief get stack instance
-     * @return stack instance
+     * @brief get raw_stack instance
+     * @return raw_stack instance
      */
-    static stack::ptr get_instance();
+    static raw_stack::ptr get_instance();
 
     /**
-     * @brief register device to stack
-     * @param[in] device_id device id
+     * @brief register device to raw_stack
      * @param[in] device device
      */
-    void register_device(uint8_t device_id, interface::net_device::ptr device) {
-        device_map_.insert(std::make_pair(device_id, device));
+    virtual void register_device(interface::net_device::ptr device) {
+        device_map_.insert(std::make_pair(device->get_device_ifindex(), device));
     }
 
     /**
-     * @brief register network handler to stack
-     * @param[in] device_id device id
+     * @brief register network handler to raw_stack
      * @param[in] handler network handler
      */
-    void register_network_handler(def::network_protocol handler_id, interface::network_handler::ptr handler) {
-        network_handler_map_.insert(std::make_pair(handler_id, handler));
+    virtual void register_network_handler(interface::network_handler::ptr handler) {
+        network_handler_map_.insert(std::make_pair(handler->get_protocol(), handler));
     }
 
     /**
@@ -53,23 +51,28 @@ public:
      * @param[in] buffer write buffer
      * @param[in] device_id device id
      */
-    void write_to_device(flow::sk_buff::ptr buffer, uint8_t device_id);
+    virtual void write_to_device(flow::sk_buff::ptr buffer);
 
     /**
      * @brief read and handle buffer
      */
-    void run();
+    virtual void run();
 
     /**
-     * @brief release stack
+     * @brief wait signal to end
      */
-    virtual ~stack();
+    virtual void wait();
+
+    /**
+     * @brief release raw_stack
+     */
+    virtual ~raw_stack();
 
 private:
     /**
-     * @brief create stack
+     * @brief create raw_stack
      */
-    stack();
+    raw_stack();
 
     /**
      * @brief read device

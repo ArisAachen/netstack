@@ -17,12 +17,27 @@ namespace generic {
 std::string format_mac_address(const uint8_t* src_mac);
 
 /**
+ * @brief format ip output
+ * @param[in] src_ip source ip address
+ * @return format ip address
+ */
+std::string format_ip_address(const uint32_t src_ip);
+
+/**
  * @brief convert mac back
  * @param[in] src_mac source mac address
  * @param[out] dst_mac dst mac address
  * @return if convert success
  */
 bool convert_string_to_mac(const std::string& src_mac, uint8_t* dst_mac);
+
+/**
+ * @brief convert ip back
+ * @param[in] src_ip source mac address
+ * @param[out] dst_ip dst mac address
+ * @return if convert success
+ */
+bool convert_string_to_ip(const std::string& src_ip, uint32_t* dst_ip);
 }
 
 

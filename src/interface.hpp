@@ -1,8 +1,10 @@
 #ifndef __INTERFACE_H__
 #define __INTERFACE_H__
 
+#include "def.hpp"
 #include "flow.hpp"
 
+#include <cstdint>
 #include <memory>
 
 namespace interface {
@@ -36,6 +38,23 @@ struct net_device {
      */
     virtual int write_to_device(flow::sk_buff::ptr buffer) = 0;
 
+    /**
+     * @brief get net_device mac
+     * @return device mac
+     */
+    virtual uint8_t* get_device_mac() = 0;
+
+    /**
+     * @brief get net_device ip
+     * @return device ip
+     */
+    virtual uint32_t get_device_ip() = 0;
+
+    /**
+     * @brief get net_device ifindex
+     * @return device ifindex
+     */
+    virtual uint8_t get_device_ifindex() = 0;
 
 public:
     /**
@@ -67,6 +86,12 @@ struct network_handler {
     typedef std::shared_ptr<network_handler> ptr;
 
     /**
+     * @brief package protocol
+     * @return return network layer protocol
+     */    
+    virtual def::network_protocol get_protocol() = 0;
+
+    /**
      * @brief package flow
      * @param[in] skb sk buffer
      * @return return if package is valid, like checksum failed
@@ -79,6 +104,48 @@ struct network_handler {
      * @return return if package is valid, like checksum failed
      */        
     virtual bool unpack_flow(flow::sk_buff::ptr skb) = 0;
+};
+
+
+/**
+ * @file interface.hpp
+ * @brief stack protocol stack, include tcp/ip, arp, icmp, etc
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ */
+class stack {
+public:
+    typedef std::shared_ptr<stack> ptr;
+
+    /**
+     * @brief register device to stack
+     * @param[in] device device
+     */
+    virtual void register_device(interface::net_device::ptr device) = 0;
+
+    /**
+     * @brief register network handler to stack
+     * @param[in] device_id device id
+     * @param[in] handler network handler
+     */
+    virtual void register_network_handler(interface::network_handler::ptr handler) = 0;
+
+    /**
+     * @brief write to device
+     * @param[in] buffer write buffer
+     * @param[in] device_id device id
+     */
+    virtual void write_to_device(flow::sk_buff::ptr buffer) = 0;
+
+    /**
+     * @brief read and handle buffer
+     */
+    virtual void run() = 0;
+
+    /**
+     * @brief wait for end
+     */    
+    virtual void wait() = 0;
 };
 
 }

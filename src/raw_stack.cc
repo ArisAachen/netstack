@@ -1,50 +1,64 @@
-#include "stack.hpp"
+#include "raw_stack.hpp"
 #include "arp.hpp"
 #include "def.hpp"
 #include "macvlan.hpp"
 
+#include <algorithm>
 #include <iostream>
-#include <utility>
 
 namespace stack {
 
-// get stack instance
-stack::ptr stack::get_instance() {
-    static stack::ptr instance = stack::ptr(new stack());
+// get raw_stack instance
+raw_stack::ptr raw_stack::get_instance() {
+    static raw_stack::ptr instance = raw_stack::ptr(new raw_stack());
     return instance;
 }
 
-stack::stack() {
+raw_stack::raw_stack() {
     // register macvlan device
-    register_device(0, driver::macvlan_device::ptr(new driver::macvlan_device("new_eth0", "", "f6:34:95:26:90:66")));
-    register_network_handler(def::network_protocol::arp, protocol::arp::ptr(new protocol::arp()));
+    register_device(driver::macvlan_device::ptr(new driver::macvlan_device("new_eth0", "192.168.121.253", "f6:34:95:26:90:66")));
+    register_network_handler(protocol::arp::ptr(new protocol::arp()));
 }
 
-void stack::write_to_device(flow::sk_buff::ptr buffer, uint8_t device_id) {
-    auto device = device_map_.find(device_id);
-    if (device != device_map_.end()) {
-        device->second->write_to_device(buffer);
-    } else {
-        device_map_.begin()->second->write_to_device(buffer);
+// write buffer to device
+void raw_stack::write_to_device(flow::sk_buff::ptr buffer) {
+    // check if device exist
+    if (!buffer->dev.expired()) {
+        auto dev = buffer->dev.lock();
+        dev->write_to_device(buffer);
     }
+    // find device
+    if (device_map_.empty())
+        return;
+    device_map_.begin()->second->write_to_device(buffer);
 }
 
-void stack::run() {
+void raw_stack::run() {
     handle_packege();
     run_read_device();
 }
 
-void stack::run_read_device() {
+// wait signal to end
+void raw_stack::wait() {
+    for (auto& thread : thread_vec_) {
+        thread.join();
+    }
+    for (auto& device : device_map_) {
+        device.second->down();
+    }
+}
+
+void raw_stack::run_read_device() {
     for (auto& device : device_map_) {
         device.second->up();
         // read buffer from device
         thread_vec_.push_back(std::thread(&interface::net_device::read_thread, device.second));
         // write buffer from device
-        // thread_vec_.push_back(std::thread(&interface::net_device::write_thread, device.second));
+        thread_vec_.push_back(std::thread(&interface::net_device::write_thread, device.second));
     }
 }
 
-void stack::handle_packege() {
+void raw_stack::handle_packege() {
     // handle all packages
     for (auto& device : device_map_) {
         auto thread = std::thread([&] {
@@ -53,6 +67,7 @@ void stack::handle_packege() {
                 auto buffer = device.second->read_from_device();
                 if (buffer == nullptr)
                     continue;
+                buffer->stack = weak_from_this();
                 // search handle 
                 handle_network_package(buffer);
             }
@@ -62,7 +77,7 @@ void stack::handle_packege() {
 }
 
 // handle network package
-void stack::handle_network_package(flow::sk_buff::ptr buffer) {
+void raw_stack::handle_network_package(flow::sk_buff::ptr buffer) {
     // get network handler
     auto handler = network_handler_map_.find(def::network_protocol(buffer->protocol));
     if (handler == network_handler_map_.end()) {
@@ -73,13 +88,8 @@ void stack::handle_network_package(flow::sk_buff::ptr buffer) {
     handler->second->unpack_flow(buffer);
 }
 
-stack::~stack() {
-    for (auto& thread : thread_vec_) {
-        thread.join();
-    }
-    for (auto& device : device_map_) {
-        device.second->down();
-    }
+raw_stack::~raw_stack() {
+    std::cout << "stack release" << std::endl;
     // release device map
     device_map_.clear();
     // release network handler map
