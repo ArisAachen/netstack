@@ -1,6 +1,7 @@
 #include "arp.hpp"
 #include "def.hpp"
 #include "flow.hpp"
+#include "utils.hpp"
 
 #include <cstdint>
 #include <iostream>
@@ -44,20 +45,18 @@ bool arp::handle_arp_request(flow::sk_buff::ptr buffer) {
     auto req_hdr = reinterpret_cast<const flow::arp_hdr*>(buffer->get_data());
     // check target ip 
     if (ntohl(req_hdr->dst_ip) != def::global_def_ip) {
-        std::cout << "arp request target is not local, size: " << std::endl;
         return false;
     }
     std::cout << "arp request target is local" << std::endl;
-    flow::sk_buff::ptr resp_buffer = flow::sk_buff::ptr(new flow::sk_buff());
-    resp_buffer->data = std::string("");
-
+    size_t size = sizeof(struct flow::arp_hdr) + sizeof(struct flow::ether_hr);
+    flow::sk_buff::ptr resp_buffer = flow::sk_buff::alloc(size);
     // create response header
     struct flow::arp_hdr resp_hdr;
     resp_hdr.hardware_type = req_hdr->hardware_type;
     resp_hdr.hardware_len = req_hdr->hardware_len;
     resp_hdr.protocol = req_hdr->protocol;
     resp_hdr.protocol_len = req_hdr->protocol_len;
-    resp_hdr.operator_code = uint16_t(def::arp_op_code::reply);
+    resp_hdr.operator_code = htons(uint16_t(def::arp_op_code::reply));
     // check if device has expired
     if (buffer->dev.expired()) {
         std::cout << "device has expired" << std::endl;
@@ -66,12 +65,14 @@ bool arp::handle_arp_request(flow::sk_buff::ptr buffer) {
     // get device
     auto dev = buffer->dev.lock();
     // copy source device info
-    resp_hdr.src_ip = dev->get_device_ip();
+    resp_hdr.src_ip = htonl(dev->get_device_ip());
     memccpy(resp_hdr.src_mac, dev->get_device_mac(), 0, sizeof(uint8_t) * def::mac_len);
     // copy dst device info
     resp_hdr.dst_ip = req_hdr->src_ip;
     memccpy(resp_hdr.dst_mac, req_hdr->src_mac, 0, sizeof(uint8_t) * def::mac_len);
     // copy buffer to skb
+    flow::skb_pull(resp_buffer, sizeof(struct flow::ether_hr));
+    resp_buffer->protocol = uint16_t(def::network_protocol::arp);
     resp_buffer->store_data((char *)&resp_hdr, sizeof(struct flow::arp_hdr));
     memccpy(resp_buffer->dst.mac_address, req_hdr->src_mac, 0, sizeof(uint8_t) * def::mac_len);
     // check if stack has expired

@@ -56,7 +56,7 @@ bool macvlan_device::up() {
         std::cout << "bind raw socket failed" << std::strerror(errno) << std::endl;
         return false;
     }
-    std::cout << "up macvlan device success, device name: " << dev_name_ << ", ifindex: " << ifindex 
+    std::cout << "up macvlan device success, device name: " << dev_name_ << ", ifindex: " << (int)if_index_ 
         << ", mac: " << std::hex << utils::generic::format_mac_address(mac_address_) 
         << ", ip: " << utils::generic::format_ip_address(ip_address_) << std::endl;
     return true;
@@ -81,6 +81,14 @@ flow::sk_buff::ptr macvlan_device::read_from_device() {
 
 // write buffer to device
 int macvlan_device::write_to_device(flow::sk_buff::ptr buffer) {
+    // create ether header
+    struct flow::ether_hr ether_hdr;
+    ether_hdr.protocol = htons(buffer->protocol);
+    memccpy(ether_hdr.src, mac_address_, 0, sizeof(uint8_t) * def::mac_len);
+    memccpy(ether_hdr.dst, buffer->dst.mac_address, 0, sizeof(uint8_t) * def::mac_len);
+    // append mac layer header
+    flow::skb_push(buffer, sizeof(struct flow::ether_hr));
+    buffer->store_data((char *)&ether_hdr, sizeof(struct flow::ether_hr));
     std::unique_lock<std::mutex> lock(write_mutex_);
     write_head_.push(buffer);
     write_cond_.notify_one();
@@ -121,8 +129,7 @@ void macvlan_device::read_thread() {
             !memcmp(def::broadcast_mac, hdr->dst, sizeof(uint8_t) * def::mac_len))
             continue;
         // malloc flow
-        flow::sk_buff::ptr skb = flow::sk_buff::ptr(new flow::sk_buff());
-        skb->total_len = sizeof(struct flow::sk_buff) + size;
+        flow::sk_buff::ptr skb = flow::sk_buff::alloc(size);
         skb->data_len = size;
         skb->protocol = htons(hdr->protocol);
         skb->dev = weak_from_this();
@@ -131,8 +138,9 @@ void macvlan_device::read_thread() {
         // push to queue
         std::lock_guard<std::mutex> lock(read_mutex_);
         read_head_.push(skb);
-        std::cout << utils::generic::format_mac_address(hdr->src) << " -> " 
-            << utils::generic::format_mac_address(hdr->dst) << ", protocol: " << std::hex << (int)skb->protocol << std::endl;
+        // std::cout << utils::generic::format_mac_address(hdr->src) << " -> " 
+        //     << utils::generic::format_mac_address(hdr->dst) << ", protocol: " 
+        //     << std::hex << (int)skb->protocol << std::endl;
         read_cond_.notify_one();
     }
 }
@@ -149,7 +157,15 @@ void macvlan_device::write_thread() {
             buffer = write_head_.front();
             write_head_.pop();
         }
-
+        // write buffer to device
+        size_t size = write(macvlan_fd_, buffer->data.c_str(), buffer->data_len);
+        if (size < 0) {
+            std::cout << "write macvlan buffer failed" << std::endl;
+            break;
+        } else if (size == 0) {
+            std::cout << "write macvlan buffer end" << std::endl;
+        }
+        std::cout << "write macvlan buffer success, size: " << std::dec << size << std::endl;
     }
 }
 

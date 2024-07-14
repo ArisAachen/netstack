@@ -69,4 +69,9 @@ std::optional<bool> set_kernel_device_status(const std::string& device_name, def
 }
 
 
+
+namespace algorithm {
+
+}
+
 }

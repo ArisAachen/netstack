@@ -3,11 +3,11 @@
 
 #include "def.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <memory>
 #include <string>
 
@@ -69,10 +69,30 @@ struct sk_buff {
     /// data 
     std::string data;
 
-    // save data to buffer
+    /**
+     * @brief alloc data size buffer
+     * @return sk_buff::ptr sk buff ptr
+     */    
+    static sk_buff::ptr alloc(size_t size) {
+        sk_buff::ptr buffer = sk_buff::ptr(new sk_buff());
+        buffer->data.resize(size);
+        buffer->data_begin = 0;
+        buffer->data_tail = 0;
+        buffer->data_len = 0;
+        buffer->block_head = 0;
+        buffer->block_end = size;
+        buffer->total_len = sizeof(struct sk_buff) + size;
+        return buffer;
+    }
+
+    /**
+     * @brief store data
+     * @param buf data
+     * @param size data size
+     */
     void store_data(char* buf, size_t size) {
-        data.append(buf, size);
-        data_tail += size;
+        std::copy(buf, buf + size, data.begin() + data_begin);
+        data_len += size;
     }
 
     /**

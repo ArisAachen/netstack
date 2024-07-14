@@ -70,6 +70,9 @@ struct netlink_request {
 // mac address len
 const uint8_t mac_len = 6;
 
+// crc len
+const uint8_t crc_len = 4;
+
 // ether package size
 const uint32_t flow_buffer_size = 65535;
 
