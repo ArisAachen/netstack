@@ -24,13 +24,20 @@ namespace stack {
  */
 class raw_stack : public interface::stack, public std::enable_shared_from_this<raw_stack> {
 public:
+    /// raw_stack ptr
     typedef std::shared_ptr<raw_stack> ptr;
+    typedef std::weak_ptr<raw_stack> weak_ptr;
 
     /**
      * @brief get raw_stack instance
      * @return raw_stack instance
      */
     static raw_stack::ptr get_instance();
+
+    /**
+     * @brief init raw_stack
+     */
+    virtual void init();
 
     /**
      * @brief register device to raw_stack

@@ -118,6 +118,13 @@ struct network_handler {
 class stack {
 public:
     typedef std::shared_ptr<stack> ptr;
+    typedef std::weak_ptr<stack> weak_ptr;
+
+    /**
+     * @brief init stack
+     * @return init stack
+     */
+    virtual void init() = 0;
 
     /**
      * @brief register device to stack

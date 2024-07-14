@@ -15,6 +15,13 @@
 
 namespace protocol {
 
+arp::arp(interface::stack::weak_ptr stack) : stack_(stack) {}
+
+// create arp 
+arp::ptr arp::create(interface::stack::weak_ptr stack) {
+    return arp::ptr(new arp(stack));
+}
+
 // get network protocol
 def::network_protocol arp::get_protocol() {
     return def::network_protocol::arp;
@@ -36,9 +43,9 @@ bool arp::unpack_flow(flow::sk_buff::ptr buffer) {
     case def::arp_op_code::request:
         return handle_arp_request(buffer);
     case def::arp_op_code::reply:
-
+        return handle_arp_response(buffer);
     default:
-        std::cout << "recv unknown arp request" << std::endl;
+        std::cout << "recv unknown arp request, code: " << std::hex << opcode << std::endl;
     }
 
     return true;
@@ -87,12 +94,14 @@ bool arp::handle_arp_request(flow::sk_buff::ptr buffer) {
     auto stack = buffer->stack.lock();
     stack->update_neighbor(req_hdr, dev);
     stack->write_to_device(resp_buffer);
+    send_arp_request(req_hdr->src_ip, dev);
 
     return true;
 }
 
 // handle arp response
 bool arp::handle_arp_response(flow::sk_buff::ptr buffer) {
+    std::cout << "handle arp response" << std::endl;
     auto resp_hdr = reinterpret_cast<const flow::arp_hdr*>(buffer->get_data());
     // check target ip
     if (ntohl(resp_hdr->dst_ip) != def::global_def_ip) {
@@ -106,6 +115,42 @@ bool arp::handle_arp_response(flow::sk_buff::ptr buffer) {
     // get stack
     auto stack = buffer->stack.lock();
     stack->update_neighbor(resp_hdr, buffer->dev.lock());
+    return true;
+}
+
+// send arp request
+bool arp::send_arp_request(uint32_t ip, interface::net_device::ptr dev) {
+    // create buffer
+    auto buffer = flow::sk_buff::alloc(sizeof(struct flow::arp_hdr) + sizeof(struct flow::ether_hr));
+    // create arp header
+    struct flow::arp_hdr hdr;
+    hdr.hardware_type = htons(uint16_t(def::hardware_type::ethernet));
+    hdr.protocol = htons(uint16_t(def::network_protocol::ip));
+    hdr.hardware_len = def::mac_len;
+    hdr.protocol_len = def::ip_len;
+    hdr.operator_code = htons(uint16_t(def::arp_op_code::request));
+    // copy source device info
+    hdr.src_ip = htonl(dev->get_device_ip());
+    memccpy(hdr.src_mac, dev->get_device_mac(), 0, sizeof(uint8_t) * def::mac_len);
+    // copy dst device info
+    hdr.dst_ip = ip;
+    memccpy(hdr.dst_mac, def::broadcast_mac, 0, sizeof(uint8_t) * def::mac_len);
+    // copy buffer to skb
+    flow::skb_pull(buffer, sizeof(struct flow::ether_hr));
+    buffer->protocol = uint16_t(def::network_protocol::arp);
+    buffer->store_data((char *)&hdr, sizeof(struct flow::arp_hdr));
+    memccpy(buffer->dst.mac_address, def::broadcast_mac, 0, sizeof(uint8_t) * def::mac_len);
+    // store device
+    buffer->dev = dev;
+    // check if stack has expired
+    if (stack_.expired()) {
+        std::cout << "stack has expired" << std::endl;
+        return false;
+    }
+    // get stack
+    auto stack = stack_.lock();
+    stack->write_to_device(buffer);
+
     return true;
 }
 

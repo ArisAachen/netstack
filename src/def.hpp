@@ -36,6 +36,18 @@ enum class device_type {
 
 /**
  * @file def.h
+ * @brief hardware type
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ */
+enum class hardware_type : uint16_t {
+    none,
+    ethernet = 0x1,
+    unknown = 0xFFFF,
+};
+
+/**
+ * @file def.h
  * @brief network layer type
  * @author ArisAachen
  * @copyright Copyright (c) 2024 aris All rights reserved
@@ -72,6 +84,9 @@ const uint8_t mac_len = 6;
 
 // crc len
 const uint8_t crc_len = 4;
+
+// ip protocol len
+const uint8_t ip_len = 4;
 
 // ether package size
 const uint32_t flow_buffer_size = 65535;

@@ -18,10 +18,14 @@ raw_stack::ptr raw_stack::get_instance() {
 }
 
 raw_stack::raw_stack() {
+    neighbor_table_ = std::make_shared<flow_table::neighbor_table>();
+}
+
+// init raw_stack
+void raw_stack::init() {
     // register macvlan device
     register_device(driver::macvlan_device::ptr(new driver::macvlan_device("new_eth0", "192.168.121.253", "f6:34:95:26:90:66")));
-    register_network_handler(protocol::arp::ptr(new protocol::arp()));
-    neighbor_table_ = std::make_shared<flow_table::neighbor_table>();
+    register_network_handler(protocol::arp::create(weak_from_this()));
 }
 
 // write buffer to device

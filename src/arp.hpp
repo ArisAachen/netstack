@@ -27,7 +27,14 @@ public:
     /**
      * @brief not allow to create arp obj
      */
-    arp() {};
+    arp() = delete;
+
+    /**
+     * @brief create arp obj
+     * @param[in] stack sk buffer
+     * @return return if package is valid, like checksum failed
+     */
+    static arp::ptr create(interface::stack::weak_ptr stack);
 
     /**
      * @brief release arp obj
@@ -48,7 +55,6 @@ public:
      */    
     virtual bool pack_flow(flow::sk_buff::ptr buffer);
 
-
     /**
      * @brief package flow
      * @param[in] skb sk buffer
@@ -57,6 +63,13 @@ public:
     virtual bool unpack_flow(flow::sk_buff::ptr buffer);
 
 private:
+    /**
+     * @brief create arp with stack
+     * @param[in] stack sk buffer
+     * @return return if package is valid, like checksum failed
+     */
+    arp(interface::stack::weak_ptr stack);
+
     /**
      * @brief handle arp request
      * @param[in] skb sk buffer
@@ -70,6 +83,18 @@ private:
      * @return return if package is valid, like checksum failed
      */
     bool handle_arp_response(flow::sk_buff::ptr buffer);
+
+    /**
+     * @brief send arp request
+     * @param[in] ip ip address
+     * @param[in] dev net device
+     * @return return if package is valid, like checksum failed
+     */
+    bool send_arp_request(uint32_t ip, interface::net_device::ptr dev);
+
+private:
+    /// stack
+    interface::stack::weak_ptr stack_;
 };
 
 }
