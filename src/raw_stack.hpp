@@ -2,7 +2,9 @@
 #define __STACK_H__
 
 
+#include "arp.hpp"
 #include "def.hpp"
+#include "flow.hpp"
 #include "interface.hpp"
 
 #include <cstdint>
@@ -54,6 +56,12 @@ public:
     virtual void write_to_device(flow::sk_buff::ptr buffer);
 
     /**
+     * @brief update neighbor info
+     * @param[in] hdr arp hdr
+     */
+    virtual void update_neighbor(const struct flow::arp_hdr* hdr, interface::net_device::ptr dev);
+
+    /**
      * @brief read and handle buffer
      */
     virtual void run();
@@ -98,6 +106,8 @@ private:
     std::unordered_map<uint8_t, interface::net_device::ptr> device_map_;
     /// thread vector
     std::vector<std::thread> thread_vec_;
+    /// neighbor flow 
+    flow_table::neighbor_table::ptr neighbor_table_;
 };
 
 }

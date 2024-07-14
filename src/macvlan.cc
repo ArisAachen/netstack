@@ -165,7 +165,7 @@ void macvlan_device::write_thread() {
         } else if (size == 0) {
             std::cout << "write macvlan buffer end" << std::endl;
         }
-        std::cout << "write macvlan buffer success, size: " << std::dec << size << std::endl;
+        // std::cout << "write macvlan buffer success, size: " << std::dec << size << std::endl;
     }
 }
 

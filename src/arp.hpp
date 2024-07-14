@@ -5,7 +5,14 @@
 #include "flow.hpp"
 #include "interface.hpp"
 
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <memory>
+#include <optional>
+#include <shared_mutex>
+#include <unordered_map>
+
 namespace protocol {
 
 /**
@@ -56,10 +63,105 @@ private:
      * @return return if package is valid, like checksum failed
      */    
     bool handle_arp_request(flow::sk_buff::ptr buffer);
+
+    /**
+     * @brief handle arp response
+     * @param[in] skb sk buffer
+     * @return return if package is valid, like checksum failed
+     */
+    bool handle_arp_response(flow::sk_buff::ptr buffer);
 };
 
 }
 
+
+namespace flow_table {
+
+struct neighbor {
+typedef std::shared_ptr<neighbor> ptr;
+public:
+    /**
+     * @brief not allow create neighbor direct
+     */
+    neighbor() = delete;
+
+    static neighbor::ptr create(uint32_t ip, const uint8_t* mac, interface::net_device::ptr dev) {
+        auto neigh = neighbor::ptr(new neighbor(ip, mac, dev));
+        return neigh;
+    }
+
+    /**
+     * @brief release neighbor
+     */
+    virtual ~neighbor() {
+
+    }
+
+private:
+    // create 
+    neighbor(uint32_t ip, const uint8_t* mac, interface::net_device::ptr dev) {
+        ip_address = ip;
+        memccpy(mac_address, mac, 0, sizeof(uint8_t) * def::mac_len);
+        device = dev;
+    }
+
+public:
+    /// ip address
+    uint32_t ip_address;
+    /// store neigh mac
+    uint8_t mac_address[def::mac_len];
+    /// output device 
+    interface::net_device::ptr device;
+};
+
+/**
+ * @file arp.h
+ * @brief ip neighbor table
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ */
+class neighbor_table {
+public:
+    typedef std::shared_ptr<neighbor_table> ptr;
+    /**
+     * @brief create neighbor table
+     */
+    neighbor_table();
+
+    /**
+     * @brief release neighbor table
+     */
+    virtual ~neighbor_table();
+
+    /**
+     * @brief insert ip neighbor info
+     * @param[in] key ip key 
+     * @param[in] dev dev value
+     */
+    virtual void insert(uint32_t key, neighbor::ptr neigh, bool replace);
+
+    /**
+     * @brief remove ip neighbor info
+     * @param[in] key ip key 
+     */   
+    virtual void remove(uint32_t key);
+
+    /**
+     * @brief handle arp request
+     * @param[in] key ip key
+     * @return return if neigh device exist
+     */
+    virtual std::optional<neighbor::ptr> get(uint32_t key);
+
+private:
+    /// share lock 
+    std::shared_mutex mutex_;
+    /// neighbor table
+    std::unordered_map<uint32_t, neighbor::ptr> neigh_map_;
+};
+
+
+}
 
 
 

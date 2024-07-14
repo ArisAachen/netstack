@@ -3,8 +3,13 @@
 #include "flow.hpp"
 #include "utils.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <mutex>
+#include <optional>
+#include <shared_mutex>
+#include <utility>
 
 #include <netinet/in.h>
 
@@ -18,7 +23,6 @@ def::network_protocol arp::get_protocol() {
 bool arp::pack_flow(flow::sk_buff::ptr buffer) {
     return false;
 }
-
 
 // unpack flow
 bool arp::unpack_flow(flow::sk_buff::ptr buffer) {
@@ -47,7 +51,6 @@ bool arp::handle_arp_request(flow::sk_buff::ptr buffer) {
     if (ntohl(req_hdr->dst_ip) != def::global_def_ip) {
         return false;
     }
-    std::cout << "arp request target is local" << std::endl;
     size_t size = sizeof(struct flow::arp_hdr) + sizeof(struct flow::ether_hr);
     flow::sk_buff::ptr resp_buffer = flow::sk_buff::alloc(size);
     // create response header
@@ -82,10 +85,69 @@ bool arp::handle_arp_request(flow::sk_buff::ptr buffer) {
     }
     // get stack
     auto stack = buffer->stack.lock();
+    stack->update_neighbor(req_hdr, dev);
     stack->write_to_device(resp_buffer);
 
     return true;
 }
 
+// handle arp response
+bool arp::handle_arp_response(flow::sk_buff::ptr buffer) {
+    auto resp_hdr = reinterpret_cast<const flow::arp_hdr*>(buffer->get_data());
+    // check target ip
+    if (ntohl(resp_hdr->dst_ip) != def::global_def_ip) {
+        return false;
+    }
+    // check if stack has expired
+    if (buffer->stack.expired()) {
+        std::cout << "stack has expired" << std::endl;
+        return false;
+    }
+    // get stack
+    auto stack = buffer->stack.lock();
+    stack->update_neighbor(resp_hdr, buffer->dev.lock());
+    return true;
+}
+
+
+}
+
+
+namespace flow_table {
+
+neighbor_table::neighbor_table() {
+
+}
+
+neighbor_table::~neighbor_table() {
+
+}
+
+// insert neighbor table
+void neighbor_table::insert(uint32_t key, neighbor::ptr neigh, bool replace) {
+    // check if table already exist, and need replace
+    if (get(key).has_value() && !replace) 
+        return;
+    // update ip neigh table
+    std::lock_guard<std::shared_mutex> lock(mutex_);
+    neigh_map_.insert(std::make_pair(key, neigh));
+    std::cout << "insert neighbor table, ip: " << utils::generic::format_ip_address(htonl(key))
+        << ", mac: " << utils::generic::format_mac_address(neigh->mac_address) << std::endl;
+}
+
+// remove neighbor table
+void neighbor_table::remove(uint32_t key) {
+    std::lock_guard<std::shared_mutex> lock(mutex_);
+    neigh_map_.erase(neigh_map_.find(key));
+}
+
+// get neighbor table
+std::optional<neighbor::ptr> neighbor_table::get(uint32_t key) {
+    std::shared_lock<std::shared_mutex> lock(mutex_);
+    auto elem = neigh_map_.find(key);
+    if (elem == neigh_map_.end())
+        return std::nullopt;
+    return elem->second;
+}
 
 }

@@ -1,10 +1,13 @@
 #include "raw_stack.hpp"
 #include "arp.hpp"
 #include "def.hpp"
+#include "flow.hpp"
+#include "interface.hpp"
 #include "macvlan.hpp"
 
-#include <algorithm>
+#include <cstdint>
 #include <iostream>
+#include <netinet/in.h>
 
 namespace stack {
 
@@ -18,6 +21,7 @@ raw_stack::raw_stack() {
     // register macvlan device
     register_device(driver::macvlan_device::ptr(new driver::macvlan_device("new_eth0", "192.168.121.253", "f6:34:95:26:90:66")));
     register_network_handler(protocol::arp::ptr(new protocol::arp()));
+    neighbor_table_ = std::make_shared<flow_table::neighbor_table>();
 }
 
 // write buffer to device
@@ -46,6 +50,21 @@ void raw_stack::wait() {
     for (auto& device : device_map_) {
         device.second->down();
     }
+}
+
+// update neighbor info 
+void raw_stack::update_neighbor(const struct flow::arp_hdr* hdr, interface::net_device::ptr dev) {
+    // check if arp is empty
+    if (hdr == nullptr)
+        return;
+    uint32_t ip_address;
+    uint8_t mac_address[def::mac_len];
+    auto opcode = def::arp_op_code(htons(hdr->operator_code));
+    // check if op is request or reply
+    if (opcode != def::arp_op_code::request && opcode != def::arp_op_code::reply)
+        return;
+    auto neigh = flow_table::neighbor::create(hdr->src_ip, hdr->src_mac, dev);
+    neighbor_table_->insert(hdr->src_ip, neigh, false);
 }
 
 void raw_stack::run_read_device() {
@@ -81,7 +100,7 @@ void raw_stack::handle_network_package(flow::sk_buff::ptr buffer) {
     // get network handler
     auto handler = network_handler_map_.find(def::network_protocol(buffer->protocol));
     if (handler == network_handler_map_.end()) {
-        std::cout << "recv unknown network protocol flow" << std::endl;
+        // std::cout << "recv unknown network protocol flow" << std::endl;
         return;
     }
     // handle flow

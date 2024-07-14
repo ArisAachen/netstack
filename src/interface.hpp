@@ -4,8 +4,10 @@
 #include "def.hpp"
 #include "flow.hpp"
 
+#include <any>
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 namespace interface {
 
@@ -138,6 +140,12 @@ public:
     virtual void write_to_device(flow::sk_buff::ptr buffer) = 0;
 
     /**
+     * @brief update neighbor info
+     * @param[in] hdr arp hdr
+     */
+    virtual void update_neighbor(const struct flow::arp_hdr* hdr, interface::net_device::ptr dev) = 0;
+
+    /**
      * @brief read and handle buffer
      */
     virtual void run() = 0;
@@ -146,6 +154,28 @@ public:
      * @brief wait for end
      */    
     virtual void wait() = 0;
+};
+
+/**
+ * @file interface.hpp
+ * @brief store flow table, include arp table, route table, etc
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ */
+struct flow_table {
+    /**
+     * @brief store flow table
+     * @param[in] key store key
+     * @param[in] value store value
+     */
+    virtual void store(std::any key, std::any value) = 0;
+
+    /**
+     * @brief get flow table value
+     * @param[in] key get key
+     * @return return value
+     */
+    virtual std::optional<std::any> lookup(std::any key) = 0;
 };
 
 }
