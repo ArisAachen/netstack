@@ -54,6 +54,7 @@ enum class hardware_type : uint16_t {
  */
 enum class network_protocol : uint16_t {
     none,
+    icmp = 0x1,
     arp = 0x806,
     ip = 0x800,
     ipv6 = 0x86DD,
@@ -71,6 +72,21 @@ enum class arp_op_code : uint16_t {
     request,
     reply,
     unkown = 0xFFFF,
+};
+
+/**
+ * @file def.h
+ * @brief icmp type
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ */
+enum class icmp_type: uint8_t {
+    reply = 0x0,
+    request = 0x8,
+};
+
+enum class icmp_code : uint8_t {
+
 };
 
 struct netlink_request {

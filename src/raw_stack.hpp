@@ -69,6 +69,14 @@ public:
     virtual void update_neighbor(const struct flow::arp_hdr* hdr, interface::net_device::ptr dev);
 
     /**
+     * @brief write to device
+     * @param[in] protocol ether protocol
+     * @param[in] buffer buffer remove ether header
+     * @return if need next handle
+     */
+    virtual bool handle_network_package(flow::sk_buff::ptr buffer);
+
+    /**
      * @brief read and handle buffer
      */
     virtual void run();
@@ -98,13 +106,6 @@ private:
      * @brief parse packet
      */
     void handle_packege();
-
-    /**
-     * @brief write to device
-     * @param[in] protocol ether protocol
-     * @param[in] buffer buffer remove ether header
-     */
-    void handle_network_package(flow::sk_buff::ptr buffer);
 
 private:
     /// network handler map

@@ -2,7 +2,9 @@
 #include "arp.hpp"
 #include "def.hpp"
 #include "flow.hpp"
+#include "icmp.hpp"
 #include "interface.hpp"
+#include "ip.hpp"
 #include "macvlan.hpp"
 
 #include <cstdint>
@@ -26,6 +28,8 @@ void raw_stack::init() {
     // register macvlan device
     register_device(driver::macvlan_device::ptr(new driver::macvlan_device("new_eth0", "192.168.121.253", "f6:34:95:26:90:66")));
     register_network_handler(protocol::arp::create(weak_from_this()));
+    register_network_handler(protocol::ip::create(weak_from_this()));
+    register_network_handler(protocol::icmp::create(weak_from_this()));
 }
 
 // write buffer to device
@@ -34,6 +38,7 @@ void raw_stack::write_to_device(flow::sk_buff::ptr buffer) {
     if (!buffer->dev.expired()) {
         auto dev = buffer->dev.lock();
         dev->write_to_device(buffer);
+        return;
     }
     // find device
     if (device_map_.empty())
@@ -92,7 +97,14 @@ void raw_stack::handle_packege() {
                     continue;
                 buffer->stack = weak_from_this();
                 // search handle 
-                handle_network_package(buffer);
+                if (!handle_network_package(buffer))
+                    continue;
+                // check if is icmp request, if is, need send to network layer
+                if (def::network_protocol(buffer->protocol) == def::network_protocol::icmp) {
+                    handle_network_package(buffer);
+                    continue;
+                }
+                
             }
         });
         thread_vec_.push_back(std::move(thread));
@@ -100,15 +112,15 @@ void raw_stack::handle_packege() {
 }
 
 // handle network package
-void raw_stack::handle_network_package(flow::sk_buff::ptr buffer) {
+bool raw_stack::handle_network_package(flow::sk_buff::ptr buffer) {
     // get network handler
     auto handler = network_handler_map_.find(def::network_protocol(buffer->protocol));
     if (handler == network_handler_map_.end()) {
-        // std::cout << "recv unknown network protocol flow" << std::endl;
-        return;
+        std::cout << "recv unknown network protocol flow, protocol: " << std::hex << buffer->protocol << std::endl;
+        return false;
     }
     // handle flow
-    handler->second->unpack_flow(buffer);
+    return handler->second->unpack_flow(buffer);
 }
 
 raw_stack::~raw_stack() {

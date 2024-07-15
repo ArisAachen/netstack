@@ -6,8 +6,6 @@
 #include "interface.hpp"
 
 #include <cstdint>
-#include <cstdlib>
-#include <cstring>
 #include <memory>
 #include <optional>
 #include <shared_mutex>

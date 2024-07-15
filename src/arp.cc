@@ -47,8 +47,7 @@ bool arp::unpack_flow(flow::sk_buff::ptr buffer) {
     default:
         std::cout << "recv unknown arp request, code: " << std::hex << opcode << std::endl;
     }
-
-    return true;
+    return false;
 }
 
 // handle arp request
@@ -58,15 +57,20 @@ bool arp::handle_arp_request(flow::sk_buff::ptr buffer) {
     if (ntohl(req_hdr->dst_ip) != def::global_def_ip) {
         return false;
     }
-    size_t size = sizeof(struct flow::arp_hdr) + sizeof(struct flow::ether_hr);
+    std::cout << "handle arp request, src: " << utils::generic::format_ip_address(ntohl(req_hdr->src_ip))
+        << ", dst: " << utils::generic::format_ip_address(ntohl(req_hdr->dst_ip)) << std::endl;
+    // create response buffer
+    size_t size = sizeof(struct flow::arp_hdr) + sizeof(struct flow::ether_hdr);
     flow::sk_buff::ptr resp_buffer = flow::sk_buff::alloc(size);
+    resp_buffer->data_len = size;
+    flow::skb_pull(resp_buffer, sizeof(struct flow::ether_hdr));
     // create response header
-    struct flow::arp_hdr resp_hdr;
-    resp_hdr.hardware_type = req_hdr->hardware_type;
-    resp_hdr.hardware_len = req_hdr->hardware_len;
-    resp_hdr.protocol = req_hdr->protocol;
-    resp_hdr.protocol_len = req_hdr->protocol_len;
-    resp_hdr.operator_code = htons(uint16_t(def::arp_op_code::reply));
+    struct flow::arp_hdr* resp_hdr = reinterpret_cast<struct flow::arp_hdr*>(resp_buffer->get_data());
+    resp_hdr->hardware_type = req_hdr->hardware_type;
+    resp_hdr->hardware_len = req_hdr->hardware_len;
+    resp_hdr->protocol = req_hdr->protocol;
+    resp_hdr->protocol_len = req_hdr->protocol_len;
+    resp_hdr->operator_code = htons(uint16_t(def::arp_op_code::reply));
     // check if device has expired
     if (buffer->dev.expired()) {
         std::cout << "device has expired" << std::endl;
@@ -75,15 +79,13 @@ bool arp::handle_arp_request(flow::sk_buff::ptr buffer) {
     // get device
     auto dev = buffer->dev.lock();
     // copy source device info
-    resp_hdr.src_ip = htonl(dev->get_device_ip());
-    memccpy(resp_hdr.src_mac, dev->get_device_mac(), 0, sizeof(uint8_t) * def::mac_len);
+    resp_hdr->src_ip = htonl(dev->get_device_ip());
+    memccpy(resp_hdr->src_mac, dev->get_device_mac(), 0, sizeof(uint8_t) * def::mac_len);
     // copy dst device info
-    resp_hdr.dst_ip = req_hdr->src_ip;
-    memccpy(resp_hdr.dst_mac, req_hdr->src_mac, 0, sizeof(uint8_t) * def::mac_len);
+    resp_hdr->dst_ip = req_hdr->src_ip;
+    memccpy(resp_hdr->dst_mac, req_hdr->src_mac, 0, sizeof(uint8_t) * def::mac_len);
     // copy buffer to skb
-    flow::skb_pull(resp_buffer, sizeof(struct flow::ether_hr));
     resp_buffer->protocol = uint16_t(def::network_protocol::arp);
-    resp_buffer->store_data((char *)&resp_hdr, sizeof(struct flow::arp_hdr));
     memccpy(resp_buffer->dst.mac_address, req_hdr->src_mac, 0, sizeof(uint8_t) * def::mac_len);
     // check if stack has expired
     if (buffer->stack.expired()) {
@@ -94,19 +96,19 @@ bool arp::handle_arp_request(flow::sk_buff::ptr buffer) {
     auto stack = buffer->stack.lock();
     stack->update_neighbor(req_hdr, dev);
     stack->write_to_device(resp_buffer);
-    send_arp_request(req_hdr->src_ip, dev);
 
-    return true;
+    return false;
 }
 
 // handle arp response
 bool arp::handle_arp_response(flow::sk_buff::ptr buffer) {
-    std::cout << "handle arp response" << std::endl;
     auto resp_hdr = reinterpret_cast<const flow::arp_hdr*>(buffer->get_data());
     // check target ip
     if (ntohl(resp_hdr->dst_ip) != def::global_def_ip) {
         return false;
     }
+    std::cout << "handle arp response, src: " << utils::generic::format_ip_address(ntohl(resp_hdr->src_ip))
+        << ", dst: " << utils::generic::format_ip_address(ntohl(resp_hdr->dst_ip)) << std::endl;
     // check if stack has expired
     if (buffer->stack.expired()) {
         std::cout << "stack has expired" << std::endl;
@@ -115,30 +117,31 @@ bool arp::handle_arp_response(flow::sk_buff::ptr buffer) {
     // get stack
     auto stack = buffer->stack.lock();
     stack->update_neighbor(resp_hdr, buffer->dev.lock());
-    return true;
+    return false;
 }
 
 // send arp request
 bool arp::send_arp_request(uint32_t ip, interface::net_device::ptr dev) {
     // create buffer
-    auto buffer = flow::sk_buff::alloc(sizeof(struct flow::arp_hdr) + sizeof(struct flow::ether_hr));
+    auto package_len = sizeof(struct flow::arp_hdr) + sizeof(struct flow::ether_hdr);
+    auto buffer = flow::sk_buff::alloc(package_len);
+    buffer->data_len = package_len;
+    flow::skb_pull(buffer, sizeof(struct flow::ether_hdr));
     // create arp header
-    struct flow::arp_hdr hdr;
-    hdr.hardware_type = htons(uint16_t(def::hardware_type::ethernet));
-    hdr.protocol = htons(uint16_t(def::network_protocol::ip));
-    hdr.hardware_len = def::mac_len;
-    hdr.protocol_len = def::ip_len;
-    hdr.operator_code = htons(uint16_t(def::arp_op_code::request));
+    auto hdr = reinterpret_cast<struct flow::arp_hdr*>(buffer->get_data());
+    std::cout << "arp begin: " << buffer->data_begin << ", offset: " << sizeof(struct flow::ether_hdr) << std::endl;
+    hdr->hardware_type = htons(uint16_t(def::hardware_type::ethernet));
+    hdr->protocol = htons(uint16_t(def::network_protocol::ip));
+    hdr->hardware_len = def::mac_len;
+    hdr->protocol_len = def::ip_len;
+    hdr->operator_code = htons(uint16_t(def::arp_op_code::request));
     // copy source device info
-    hdr.src_ip = htonl(dev->get_device_ip());
-    memccpy(hdr.src_mac, dev->get_device_mac(), 0, sizeof(uint8_t) * def::mac_len);
+    hdr->src_ip = htonl(dev->get_device_ip());
+    memccpy(hdr->src_mac, dev->get_device_mac(), 0, sizeof(uint8_t) * def::mac_len);
     // copy dst device info
-    hdr.dst_ip = ip;
-    memccpy(hdr.dst_mac, def::broadcast_mac, 0, sizeof(uint8_t) * def::mac_len);
-    // copy buffer to skb
-    flow::skb_pull(buffer, sizeof(struct flow::ether_hr));
+    hdr->dst_ip = ip;
+    memccpy(hdr->dst_mac, def::broadcast_mac, 0, sizeof(uint8_t) * def::mac_len);    
     buffer->protocol = uint16_t(def::network_protocol::arp);
-    buffer->store_data((char *)&hdr, sizeof(struct flow::arp_hdr));
     memccpy(buffer->dst.mac_address, def::broadcast_mac, 0, sizeof(uint8_t) * def::mac_len);
     // store device
     buffer->dev = dev;
@@ -147,11 +150,13 @@ bool arp::send_arp_request(uint32_t ip, interface::net_device::ptr dev) {
         std::cout << "stack has expired" << std::endl;
         return false;
     }
+    std::cout << "send arp request, src: " << utils::generic::format_ip_address(ntohl(hdr->src_ip))
+        << ", dst: " << utils::generic::format_ip_address(ntohl(hdr->dst_ip)) << std::endl;
     // get stack
     auto stack = stack_.lock();
     stack->write_to_device(buffer);
 
-    return true;
+    return false;
 }
 
 

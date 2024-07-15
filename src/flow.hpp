@@ -92,24 +92,33 @@ struct sk_buff {
     void store_data(char* buf, size_t size) {
         std::copy(buf, buf + size, data + data_begin);
         data_len += size;
+        // check if need update tail
+        if (data_begin + size > data_tail)
+            data_tail = data_begin + size;
     }
 
     /**
      * @brief get data
      * @return data or nullptr
      */    
-    const char* get_data() const {
+    char* get_data() {
         if (data_len == 0)
             return nullptr;
         return data + data_begin;
     }
 
     /**
+     * @brief get data
+     * @return get data len
+     */   
+    uint16_t get_data_len() const {
+        return data_tail - data_begin;
+    }
+
+    /**
      * @brief release buff
      */  
-    virtual ~sk_buff() {
-        std::cout << "skb release" << std::endl;
-    }
+    virtual ~sk_buff() {}
 
 private:
     /**
@@ -190,7 +199,7 @@ private:
  * @author ArisAachen
  * @copyright Copyright (c) 2024 aris All rights reserved
  */
-struct ether_hr {
+struct ether_hdr {
     /// src mac address
     uint8_t dst[6];
     /// dst mac address
@@ -267,15 +276,35 @@ struct ip_hdr {
  * @brief icmp header
  * @author ArisAachen
  * @copyright Copyright (c) 2024 aris All rights reserved
+ * @link https://datatracker.ietf.org/doc/html/rfc792
  */
 struct icmp_hdr {
     /// icmp header
     uint8_t icmp_type;
     /// icmp code
     uint8_t icmp_code;
-    /// extend header
-    uint32_t extend_header;
+    /// icmp checksum
+    uint16_t icmp_checksum;
+    /// extend data
+    char data[0];
 } __attribute__((packed));
+
+
+/**
+ * @file flow.hpp
+ * @brief icmp echo header
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ * @link https://datatracker.ietf.org/doc/html/rfc792
+ */
+struct icmp_echo_body {
+    /// identifier id 
+    uint16_t identifier;
+    /// sequence number
+    uint16_t sequence_number;
+    /// extend data
+    char data[0];
+};
 
 /**
  * @brief push buffer begin
@@ -321,7 +350,32 @@ static void skb_reserve(sk_buff::ptr buffer, size_t offset) {
 static void skb_release(sk_buff::ptr buffer) {
     buffer.reset();
     return;
-} 
+}
+
+/**
+ * @brief get ether offset
+ * @return get ether offset
+ */
+static uint16_t get_ether_offset() {
+    return sizeof(struct ether_hdr);
+}
+
+/**
+ * @brief get ip offset 
+ * @return get ip offset
+ */
+static uint16_t get_ip_offset() {
+    return get_ether_offset() + sizeof(struct ip_hdr);
+}
+
+
+/**
+ * @brief get icmp offset 
+ * @return get icmp offset
+ */
+static uint16_t get_icmp_offset() {
+    return get_ip_offset() + sizeof(struct icmp_hdr);
+}
 
 }
 
