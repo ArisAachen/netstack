@@ -8,8 +8,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <memory>
-#include <string>
 
 // pre define interface
 namespace interface {
@@ -67,15 +67,14 @@ struct sk_buff {
     std::weak_ptr<interface::stack> stack;
 
     /// data 
-    std::string data;
+    char data[0];
 
     /**
      * @brief alloc data size buffer
      * @return sk_buff::ptr sk buff ptr
      */    
     static sk_buff::ptr alloc(size_t size) {
-        sk_buff::ptr buffer = sk_buff::ptr(new sk_buff());
-        buffer->data.resize(size);
+        sk_buff::ptr buffer = sk_buff::ptr(new (size) sk_buff);
         buffer->data_begin = 0;
         buffer->data_tail = 0;
         buffer->data_len = 0;
@@ -87,11 +86,11 @@ struct sk_buff {
 
     /**
      * @brief store data
-     * @param buf data
-     * @param size data size
+     * @param[in] buf data
+     * @param[in] size data size
      */
     void store_data(char* buf, size_t size) {
-        std::copy(buf, buf + size, data.begin() + data_begin);
+        std::copy(buf, buf + size, data + data_begin);
         data_len += size;
     }
 
@@ -102,13 +101,24 @@ struct sk_buff {
     const char* get_data() const {
         if (data_len == 0)
             return nullptr;
-        return data.c_str() + data_begin;
+        return data + data_begin;
     }
 
     /**
      * @brief release buff
      */  
-    virtual ~sk_buff() {}
+    virtual ~sk_buff() {
+        std::cout << "skb release" << std::endl;
+    }
+
+private:
+    /**
+     * @brief get data
+     * @return data or nullptr
+     */    
+    void* operator new(std::size_t sk_size, uint16_t alloc_size) {
+        return malloc(sk_size + alloc_size);
+    }
 };
 
 /**
@@ -125,7 +135,7 @@ public:
 
     /**
      * @brief append sk buff to tail
-     * @param elem sk buff
+     * @param[in] elem sk buff
      */
     void append(sk_buff::ptr elem) {
         if (head == nullptr) {
@@ -140,8 +150,6 @@ public:
 
     /**
      * @brief pop sk buff from head
-     * @return sk buff ptr, nullptr if empty
-     * @param elem sk buff
      * @return sk_buff::ptr sk buff ptr, nullptr if empty
      */
     sk_buff::ptr pop() {
@@ -219,6 +227,55 @@ struct arp_hdr {
     uint32_t dst_ip;
 } __attribute__((packed));
 
+/**
+ * @file flow.hpp
+ * @brief ip header
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ */
+struct ip_hdr {
+    /// version
+    uint8_t version:4;
+    /// ip head length
+    uint8_t ip_head_len:4;
+    /// diff service
+    uint8_t diff_serv:6;
+    /// ecn 
+    uint8_t ecn:2;
+    /// ip fragment length
+    uint16_t total_len;
+    /// ip identification
+    uint16_t identification;
+    /// ip flag
+    uint8_t flags:3;
+    /// fragment offset
+    uint16_t fragment_offset:13;
+    /// time to live
+    uint8_t time_to_live;
+    /// next layer protocol
+    uint8_t protocol;
+    /// head checksum
+    uint16_t head_checksum;
+    /// source ip
+    uint32_t src_ip;
+    /// dst ip
+    uint32_t dst_ip;
+} __attribute__((packed));
+
+/**
+ * @file flow.hpp
+ * @brief icmp header
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ */
+struct icmp_hdr {
+    /// icmp header
+    uint8_t icmp_type;
+    /// icmp code
+    uint8_t icmp_code;
+    /// extend header
+    uint32_t extend_header;
+} __attribute__((packed));
 
 /**
  * @brief push buffer begin
