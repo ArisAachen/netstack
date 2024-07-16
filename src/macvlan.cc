@@ -3,6 +3,7 @@
 #include "flow.hpp"
 #include "utils.hpp"
 
+#include <array>
 #include <cassert>
 #include <cerrno>
 #include <cstdint>
@@ -20,6 +21,7 @@
 #include <arpa/inet.h>
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
+#include <variant>
 
 namespace driver {
 
@@ -86,8 +88,8 @@ int macvlan_device::write_to_device(flow::sk_buff::ptr buffer) {
     // create ether header
     struct flow::ether_hdr* ether_hdr = reinterpret_cast<struct flow::ether_hdr*>(buffer->get_data());
     ether_hdr->protocol = htons(buffer->protocol);
-    memccpy(ether_hdr->src, mac_address_, 0, sizeof(uint8_t) * def::mac_len);
-    memccpy(ether_hdr->dst, buffer->dst.mac_address, 0, sizeof(uint8_t) * def::mac_len);
+    memccpy(ether_hdr->src, mac_address_, 0, def::mac_len);
+    memccpy(ether_hdr->dst, std::get<std::array<uint8_t, def::mac_len>>(buffer->dst).data(), 0, def::mac_len);
     std::unique_lock<std::mutex> lock(write_mutex_);
     write_head_.push(buffer);
     write_cond_.notify_one();
@@ -124,22 +126,24 @@ void macvlan_device::read_thread() {
         // get ether mac 
         const flow::ether_hdr* hdr = reinterpret_cast<const flow::ether_hdr*>(buf);
         // check if should ignore
-        if (!memcmp(mac_address_, hdr->dst, sizeof(uint8_t) * def::mac_len) &&
-            !memcmp(def::broadcast_mac, hdr->dst, sizeof(uint8_t) * def::mac_len))
+        if (!memcmp(mac_address_, hdr->dst, def::mac_len) &&
+            !memcmp(def::broadcast_mac, hdr->dst, def::mac_len))
             continue;
         // malloc flow
         flow::sk_buff::ptr skb = flow::sk_buff::alloc(size);
-        skb->data_len = size;
+        // set tail and block end
+        flow::skb_put(skb, size);
+        // copy buffer
         skb->protocol = htons(hdr->protocol);
         skb->dev = weak_from_this();
         skb->store_data(buf, size);
-        flow::skb_pull(skb, sizeof(struct flow::ether_hdr));
+        flow::skb_pull(skb, flow::get_ether_offset());
         // push to queue
         std::lock_guard<std::mutex> lock(read_mutex_);
         read_head_.push(skb);
         // std::cout << utils::generic::format_mac_address(hdr->src) << " -> " 
-        //     << utils::generic::format_mac_address(hdr->dst) << ", protocol: " 
-        //     << std::hex << (int)skb->protocol << std::endl;
+        //     << utils::generic::format_mac_address(hdr->dst) << ", sizes: " 
+        //     << std::dec << size << ", protocol: "<< std::hex << (int)skb->protocol << std::endl;
         read_cond_.notify_one();
     }
 }

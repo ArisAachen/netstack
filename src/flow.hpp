@@ -4,12 +4,15 @@
 #include "def.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <memory>
+#include <netinet/in.h>
+#include <variant>
 
 // pre define interface
 namespace interface {
@@ -55,10 +58,10 @@ struct sk_buff {
     uint16_t protocol;
 
     /// write dst 
-    union {
-        uint32_t ip_address;
-        uint8_t mac_address[def::mac_len];
-    } dst;
+    std::variant<uint32_t, std::array<uint8_t, def::mac_len>> dst;
+
+    /// recv src 
+    std::variant<uint32_t, std::array<uint8_t, def::mac_len>> src;
 
     /// recv netdevice 
     std::weak_ptr<interface::net_device> dev;
@@ -98,6 +101,18 @@ struct sk_buff {
     }
 
     /**
+     * @brief store data
+     * @param[in] buf data
+     * @param[in] size data size
+     */
+    void append_data(char* buf, size_t size) {
+        std::copy(buf, buf + size, data + data_tail);
+        data_len += size;
+        // check if need update tail
+        data_tail += size;
+    }
+
+    /**
      * @brief get data
      * @return data or nullptr
      */    
@@ -126,7 +141,9 @@ private:
      * @return data or nullptr
      */    
     void* operator new(std::size_t sk_size, uint16_t alloc_size) {
-        return malloc(sk_size + alloc_size);
+        auto buffer = malloc(sk_size + alloc_size);
+        memset(buffer, 0, sk_size + alloc_size);
+        return buffer;
     }
 };
 
@@ -201,9 +218,9 @@ private:
  */
 struct ether_hdr {
     /// src mac address
-    uint8_t dst[6];
+    uint8_t dst[def::mac_len];
     /// dst mac address
-    uint8_t src[6];
+    uint8_t src[def::mac_len];
     /// next layer protocol
     uint16_t protocol;
 } __attribute__((packed));
@@ -304,7 +321,7 @@ struct icmp_echo_body {
     uint16_t sequence_number;
     /// extend data
     char data[0];
-};
+} __attribute__((packed));
 
 /**
  * @brief push buffer begin
@@ -353,11 +370,36 @@ static void skb_release(sk_buff::ptr buffer) {
 }
 
 /**
+ * @brief compute checksum
+ * @param[in] buffer buffer
+ */
+static uint16_t compute_checksum(const sk_buff::ptr buffer) {
+    // check if need append 0 to tail
+    auto remain = buffer->get_data_len() % def::checksum_div_base;
+    // TODO: check if need append 0
+    if (remain != 0)
+        std::cout << "checksum need append, count: " << remain << std::endl;
+    auto div = buffer->get_data_len() / def::checksum_div_base;
+    uint16_t sum = 0;
+    // add all bytes
+    for (uint16_t index = 0; index < div; index++) {
+        auto num_ptr = reinterpret_cast<uint16_t*>(buffer->get_data() + index * def::checksum_div_base);
+        // should convert to host
+        auto num = ntohs(*num_ptr);
+        if (def::checksum_max_num - sum > num)
+            sum += num;
+        else
+            sum += num + 1;
+    }
+    return (~sum & def::checksum_max_num);
+}
+
+/**
  * @brief get ether offset
  * @return get ether offset
  */
 static uint16_t get_ether_offset() {
-    return sizeof(struct ether_hdr);
+    return sizeof(uint16_t) + def::mac_len * 2;
 }
 
 /**
@@ -368,13 +410,20 @@ static uint16_t get_ip_offset() {
     return get_ether_offset() + sizeof(struct ip_hdr);
 }
 
-
 /**
  * @brief get icmp offset 
  * @return get icmp offset
  */
 static uint16_t get_icmp_offset() {
     return get_ip_offset() + sizeof(struct icmp_hdr);
+}
+
+/**
+ * @brief get icmp offset 
+ * @return get icmp offset
+ */
+static uint16_t get_icmp_echo_offset() {
+    return get_icmp_offset() + sizeof(struct icmp_echo_body);
 }
 
 }

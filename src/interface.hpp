@@ -161,6 +161,13 @@ public:
     virtual bool handle_network_package(flow::sk_buff::ptr buffer) = 0;
 
     /**
+     * @brief write to network
+     * @param[in] buffer buffer remove ether header
+     * @return if need next handle
+     */
+    virtual bool write_network_package(flow::sk_buff::ptr buffer) = 0;
+
+    /**
      * @brief read and handle buffer
      */
     virtual void run() = 0;

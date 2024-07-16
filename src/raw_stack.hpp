@@ -58,7 +58,6 @@ public:
     /**
      * @brief write to device
      * @param[in] buffer write buffer
-     * @param[in] device_id device id
      */
     virtual void write_to_device(flow::sk_buff::ptr buffer);
 
@@ -69,12 +68,18 @@ public:
     virtual void update_neighbor(const struct flow::arp_hdr* hdr, interface::net_device::ptr dev);
 
     /**
-     * @brief write to device
-     * @param[in] protocol ether protocol
+     * @brief handle network layer buffer
      * @param[in] buffer buffer remove ether header
      * @return if need next handle
      */
     virtual bool handle_network_package(flow::sk_buff::ptr buffer);
+
+    /**
+     * @brief write to network
+     * @param[in] buffer buffer remove ether header
+     * @return if need next handle
+     */
+    virtual bool write_network_package(flow::sk_buff::ptr buffer);
 
     /**
      * @brief read and handle buffer

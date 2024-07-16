@@ -81,6 +81,20 @@ private:
     bool handle_icmp_echo_reply(flow::sk_buff::ptr buffer);
 
     /**
+     * @brief send icmp request
+     * @param[in] skb sk buffer
+     * @return return if package is valid, like checksum failed
+     */    
+    bool send_icmp_echo_request(flow::sk_buff::ptr buffer);
+
+    /**
+     * @brief send icmp reply
+     * @param[in] skb sk buffer
+     * @return return if package is valid, like checksum failed
+     */    
+    bool send_icmp_echo_reply(flow::sk_buff::ptr buffer);
+
+    /**
      * @brief handle icmp response
      * @param[in] skb sk buffer
      * @return return if package is valid, like checksum failed

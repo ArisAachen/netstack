@@ -3,6 +3,7 @@
 #include "flow.hpp"
 #include "utils.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -60,10 +61,10 @@ bool arp::handle_arp_request(flow::sk_buff::ptr buffer) {
     std::cout << "handle arp request, src: " << utils::generic::format_ip_address(ntohl(req_hdr->src_ip))
         << ", dst: " << utils::generic::format_ip_address(ntohl(req_hdr->dst_ip)) << std::endl;
     // create response buffer
-    size_t size = sizeof(struct flow::arp_hdr) + sizeof(struct flow::ether_hdr);
+    size_t size = sizeof(struct flow::arp_hdr) + flow::get_ether_offset();
     flow::sk_buff::ptr resp_buffer = flow::sk_buff::alloc(size);
     resp_buffer->data_len = size;
-    flow::skb_pull(resp_buffer, sizeof(struct flow::ether_hdr));
+    flow::skb_pull(resp_buffer, flow::get_ether_offset());
     // create response header
     struct flow::arp_hdr* resp_hdr = reinterpret_cast<struct flow::arp_hdr*>(resp_buffer->get_data());
     resp_hdr->hardware_type = req_hdr->hardware_type;
@@ -80,13 +81,17 @@ bool arp::handle_arp_request(flow::sk_buff::ptr buffer) {
     auto dev = buffer->dev.lock();
     // copy source device info
     resp_hdr->src_ip = htonl(dev->get_device_ip());
-    memccpy(resp_hdr->src_mac, dev->get_device_mac(), 0, sizeof(uint8_t) * def::mac_len);
+    memccpy(resp_hdr->src_mac, dev->get_device_mac(), 0, def::mac_len);
     // copy dst device info
     resp_hdr->dst_ip = req_hdr->src_ip;
-    memccpy(resp_hdr->dst_mac, req_hdr->src_mac, 0, sizeof(uint8_t) * def::mac_len);
+    memccpy(resp_hdr->dst_mac, req_hdr->src_mac, 0, def::mac_len);
     // copy buffer to skb
     resp_buffer->protocol = uint16_t(def::network_protocol::arp);
-    memccpy(resp_buffer->dst.mac_address, req_hdr->src_mac, 0, sizeof(uint8_t) * def::mac_len);
+    // store dst in skb
+    std::array<uint8_t, def::mac_len> mac_address;
+    memccpy(mac_address.data(), req_hdr->src_mac, 0, def::mac_len);
+    resp_buffer->dst = mac_address;
+    
     // check if stack has expired
     if (buffer->stack.expired()) {
         std::cout << "stack has expired" << std::endl;
@@ -137,12 +142,15 @@ bool arp::send_arp_request(uint32_t ip, interface::net_device::ptr dev) {
     hdr->operator_code = htons(uint16_t(def::arp_op_code::request));
     // copy source device info
     hdr->src_ip = htonl(dev->get_device_ip());
-    memccpy(hdr->src_mac, dev->get_device_mac(), 0, sizeof(uint8_t) * def::mac_len);
+    memccpy(hdr->src_mac, dev->get_device_mac(), 0, def::mac_len);
     // copy dst device info
     hdr->dst_ip = ip;
-    memccpy(hdr->dst_mac, def::broadcast_mac, 0, sizeof(uint8_t) * def::mac_len);    
+    memccpy(hdr->dst_mac, def::broadcast_mac, 0, def::mac_len);    
     buffer->protocol = uint16_t(def::network_protocol::arp);
-    memccpy(buffer->dst.mac_address, def::broadcast_mac, 0, sizeof(uint8_t) * def::mac_len);
+    // store mac to skb
+    std::array<uint8_t, def::mac_len> mac_address;
+    memccpy(mac_address.data(), def::broadcast_mac, 0, def::mac_len);
+    buffer->dst = mac_address;
     // store device
     buffer->dev = dev;
     // check if stack has expired
@@ -181,7 +189,7 @@ void neighbor_table::insert(uint32_t key, neighbor::ptr neigh, bool replace) {
     // update ip neigh table
     std::lock_guard<std::shared_mutex> lock(mutex_);
     neigh_map_.insert(std::make_pair(key, neigh));
-    std::cout << "insert neighbor table, ip: " << utils::generic::format_ip_address(htonl(key))
+    std::cout << "insert neighbor table, ip: " << utils::generic::format_ip_address(key)
         << ", mac: " << utils::generic::format_mac_address(neigh->mac_address) << std::endl;
 }
 

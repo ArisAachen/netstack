@@ -5,6 +5,7 @@
 #include "flow.hpp"
 #include "interface.hpp"
 
+#include <atomic>
 #include <memory>
 
 namespace protocol {
@@ -81,6 +82,8 @@ private:
 private:
     /// stack
     interface::stack::weak_ptr stack_;
+    /// identification
+    std::atomic<uint16_t> identification_;
 };
 
 }
