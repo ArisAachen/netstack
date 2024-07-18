@@ -63,6 +63,19 @@ enum class network_protocol : uint16_t {
 
 /**
  * @file def.h
+ * @brief transport layer type
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ */
+enum class transport_protocol : uint8_t {
+    none,
+    tcp = 0x6,
+    udp = 0x11,
+    gre = 0x2F,
+};
+
+/**
+ * @file def.h
  * @brief arp operation code
  * @author ArisAachen
  * @copyright Copyright (c) 2024 aris All rights reserved
@@ -102,6 +115,17 @@ enum class icmp_code : uint8_t {
     none = 0x0,
 };
 
+/**
+ * @file def.h
+ * @brief sock 
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ */
+enum class sock_op_flag : uint8_t {
+    none,
+    non_block
+};
+
 struct netlink_request {
     struct nlmsghdr hdr;
     struct ifinfomsg info;
@@ -137,6 +161,18 @@ const uint8_t checksum_sperate_base = 16;
 
 // checksum max num
 const uint16_t checksum_max_num = 0xffff;
+
+// max ip header
+const uint8_t max_ip_header = 60;
+
+// max ether header
+const uint8_t max_ether_header = 14;
+
+// max tcp header
+const uint8_t max_tcp_header = 60;
+
+// max udp header
+const uint8_t max_udp_header = 60;
 }
 
 #endif // __DEF_H__

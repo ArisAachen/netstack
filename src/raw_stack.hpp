@@ -108,7 +108,7 @@ private:
     void run_read_device();
 
     /**
-     * @brief parse packet
+     * @brief parse packet 
      */
     void handle_packege();
 

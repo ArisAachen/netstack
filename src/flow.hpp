@@ -11,8 +11,9 @@
 #include <cstring>
 #include <iostream>
 #include <memory>
-#include <netinet/in.h>
 #include <variant>
+
+#include <netinet/in.h>
 
 // pre define interface
 namespace interface {
@@ -324,6 +325,25 @@ struct icmp_echo_body {
 } __attribute__((packed));
 
 /**
+ * @file flow.hpp
+ * @brief udp header
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ * @link https://datatracker.ietf.org/doc/html/rfc792
+ */
+struct udp_hdr {
+    /// source port
+    uint16_t src_port;
+    /// dst port
+    uint16_t dst_port;
+    /// total length
+    uint16_t total_len;
+    /// udp total checksum
+    uint16_t udp_checksum;
+    char data[0];
+} __attribute__((packed));
+
+/**
  * @brief push buffer begin
  * @param[in] buffer buffer
  * @param[in] device device
@@ -424,6 +444,24 @@ static uint16_t get_icmp_offset() {
  */
 static uint16_t get_icmp_echo_offset() {
     return get_icmp_offset() + sizeof(struct icmp_echo_body);
+}
+
+/**
+ * @brief get max tcp data offset
+ * @return get max tcp data offset
+ */
+static uint16_t get_max_tcp_data_offset() {
+    auto offset = def::max_ether_header + def::max_ip_header + def::max_tcp_header;
+    return offset;
+}
+
+/**
+ * @brief get max udp data offset
+ * @return get max udp data offset
+ */
+static uint16_t get_max_udp_data_offset() {
+    auto offset = def::max_ether_header + def::max_ip_header + def::max_udp_header;
+    return offset;
 }
 
 }

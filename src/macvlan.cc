@@ -10,10 +10,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
-
-
 #include <mutex>
 #include <string>
+
 #include <unistd.h>
 #include <net/if.h>
 #include <netinet/in.h>
@@ -21,7 +20,6 @@
 #include <arpa/inet.h>
 #include <linux/if_packet.h>
 #include <linux/if_ether.h>
-#include <variant>
 
 namespace driver {
 
