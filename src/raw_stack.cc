@@ -6,12 +6,13 @@
 #include "interface.hpp"
 #include "ip.hpp"
 #include "macvlan.hpp"
+#include "udp.hpp"
 
 #include <array>
 #include <cstdint>
-#include <cstring>
 #include <iostream>
 #include <netinet/in.h>
+#include <sys/types.h>
 #include <variant>
 
 namespace stack {
@@ -30,9 +31,12 @@ raw_stack::raw_stack() {
 void raw_stack::init() {
     // register macvlan device
     register_device(driver::macvlan_device::ptr(new driver::macvlan_device("new_eth0", "192.168.121.253", "f6:34:95:26:90:66")));
+    // register network handler
     register_network_handler(protocol::arp::create(weak_from_this()));
     register_network_handler(protocol::ip::create(weak_from_this()));
     register_network_handler(protocol::icmp::create(weak_from_this()));
+    // register transport handler
+    register_transport_handler(protocol::udp::create(weak_from_this()));
 }
 
 // write buffer to device
@@ -120,7 +124,8 @@ void raw_stack::handle_packege() {
                     handle_network_package(buffer);
                     continue;
                 }
-                
+                if (!handle_transport_package(buffer))
+                    continue;
             }
         });
         thread_vec_.push_back(std::move(thread));
@@ -139,23 +144,61 @@ bool raw_stack::handle_network_package(flow::sk_buff::ptr buffer) {
     return handler->second->unpack_flow(buffer);
 }
 
+
+// handle transport package
+bool raw_stack::handle_transport_package(flow::sk_buff::ptr buffer) {
+    // get transport handler
+    auto handler = transport_handler_map_.find(def::transport_protocol(buffer->protocol));
+    if (handler == transport_handler_map_.end()) {
+        std::cout << "recv unknown transport protocol flow, protocol: " << std::hex << buffer->protocol << std::endl;
+        return false;
+    }
+    // handle flow
+    if (!handler->second->unpack_flow(buffer))
+        return false;
+    // check if key exist
+    if (buffer->key == nullptr)
+        return true;
+    // search for socket
+    if (def::transport_protocol(buffer->protocol) == def::transport_protocol::udp) {
+        auto sock = udp_sock_table_->sock_get(buffer->key);
+        if (sock != nullptr)
+            sock->write_buffer_to_queue(buffer);
+    } else if (def::transport_protocol(buffer->protocol) == def::transport_protocol::tcp) {
+        std::cout << "current sock is tcp protocol" << std::endl;
+    }
+    return true;
+}
+
 // write network package
 bool raw_stack::write_network_package(flow::sk_buff::ptr buffer) {
-    // handle icmp layer 
-    if (def::network_protocol(buffer->protocol) == def::network_protocol::icmp) {
-        auto handler = network_handler_map_.find(def::network_protocol::ip);
-        if (handler == nullptr)
-            return false;
-        return handler->second->pack_flow(buffer);
+    auto protocol = def::network_protocol::none;
+    switch (buffer->protocol) {
+    case uint16_t(def::network_protocol::icmp):
+    case uint16_t(def::transport_protocol::tcp):
+    case uint16_t(def::transport_protocol::udp):
+        protocol = def::network_protocol::ip;
+        break;
+    default:
+        std::cout << "send unknown network package, protocol: " << buffer->protocol << std::endl; 
     }
+
     // get network handler
-    auto handler = network_handler_map_.find(def::network_protocol(buffer->protocol));
+    auto handler = network_handler_map_.find(protocol);
     if (handler == network_handler_map_.end()) {
         std::cout << "recv unknown network protocol flow, protocol: " << std::hex << buffer->protocol << std::endl;
         return false;
     }
     // handle flow
-    return handler->second->pack_flow(buffer);
+    if (!handler->second->pack_flow(buffer))
+        return false;
+    write_to_device(buffer);
+    return true;
+}
+
+// write transport package
+bool raw_stack::write_transport_package(flow::sk_buff::ptr buffer) {
+    return false;
 }
 
 raw_stack::~raw_stack() {

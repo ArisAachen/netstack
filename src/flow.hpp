@@ -21,6 +21,11 @@ namespace interface {
     class stack;
 }
 
+// sock key
+namespace flow_table {
+    struct sock_key;
+}
+
 namespace flow {
 
 /**
@@ -63,6 +68,9 @@ struct sk_buff {
 
     /// recv src 
     std::variant<uint32_t, std::array<uint8_t, def::mac_len>> src;
+
+    /// sock key
+    std::shared_ptr<flow_table::sock_key> key;
 
     /// recv netdevice 
     std::weak_ptr<interface::net_device> dev;

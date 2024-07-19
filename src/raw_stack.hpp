@@ -6,11 +6,13 @@
 #include "def.hpp"
 #include "flow.hpp"
 #include "interface.hpp"
+#include "sock.hpp"
 
 #include <cstdint>
 #include <memory>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace stack {
@@ -56,6 +58,14 @@ public:
     }
 
     /**
+     * @brief register transport handler to raw_stack
+     * @param[in] handler transport handler
+     */
+    virtual void register_transport_handler(interface::transport_handler::ptr handler) {
+        transport_handler_map_.insert(std::make_pair(handler->get_protocol(), handler));
+    }
+
+    /**
      * @brief write to device
      * @param[in] buffer write buffer
      */
@@ -75,11 +85,25 @@ public:
     virtual bool handle_network_package(flow::sk_buff::ptr buffer);
 
     /**
+     * @brief handle transport layer buffer
+     * @param[in] buffer buffer remove network header
+     * @return if need next handle
+     */    
+    virtual bool handle_transport_package(flow::sk_buff::ptr buffer);
+
+    /**
      * @brief write to network
      * @param[in] buffer buffer remove ether header
      * @return if need next handle
      */
     virtual bool write_network_package(flow::sk_buff::ptr buffer);
+
+    /**
+     * @brief write to transport
+     * @param[in] buffer write transport
+     * @return if need next handle
+     */
+    virtual bool write_transport_package(flow::sk_buff::ptr buffer);
 
     /**
      * @brief read and handle buffer
@@ -115,12 +139,18 @@ private:
 private:
     /// network handler map
     std::unordered_map<def::network_protocol, interface::network_handler::ptr> network_handler_map_;
+    /// transport handler map
+    std::unordered_map<def::transport_protocol, interface::transport_handler::ptr> transport_handler_map_;
     /// device map
     std::unordered_map<uint8_t, interface::net_device::ptr> device_map_;
     /// thread vector
     std::vector<std::thread> thread_vec_;
     /// neighbor flow 
     flow_table::neighbor_table::ptr neighbor_table_;
+    /// fd table
+    flow_table::fd_table::ptr fd_table_;
+    /// udp sock flow table
+    flow_table::sock_table::ptr udp_sock_table_;
 };
 
 }

@@ -172,7 +172,7 @@ const uint8_t max_ether_header = 14;
 const uint8_t max_tcp_header = 60;
 
 // max udp header
-const uint8_t max_udp_header = 60;
+const uint8_t max_udp_header = 8;
 }
 
 #endif // __DEF_H__

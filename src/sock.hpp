@@ -4,15 +4,20 @@
 #include "def.hpp"
 #include "flow.hpp"
 
+#include <atomic>
+#include <bitset>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <iostream>
+#include <netinet/in.h>
 #include <queue>
+#include <shared_mutex>
+#include <sys/socket.h>
 #include <unordered_map>
 
-namespace flow {
+namespace flow_table {
 
 /**
  * @brief get rol 
@@ -63,16 +68,30 @@ static inline uint32_t jhash_3words(uint32_t first, uint32_t second, uint32_t th
  * @copyright Copyright (c) 2024 aris All rights reserved
  * @link https://datatracker.ietf.org/doc/html/rfc792
  */
-struct sock_key {
+struct sock_key : std::enable_shared_from_this<sock_key> {
     typedef std::shared_ptr<sock_key> ptr;
+    /**
+    * @brief create sock key 
+    * @return hash result
+    */
+    sock_key(uint32_t src_ip, uint16_t src_port, uint32_t dst_ip, uint32_t dst_port, def::transport_protocol protocol) :
+    local_ip(src_ip), local_port(src_port), remote_ip(dst_ip), remote_port(dst_port), protocol(protocol) {}
+
+    /**
+    * @brief not allow to create empty key
+    */
+    sock_key() = delete;
+
     /// source ip
-    uint32_t src_ip;
+    uint32_t local_ip;
     /// source port
-    uint16_t src_port;
+    uint16_t local_port;
     /// dst ip
-    uint32_t dst_ip;
+    uint32_t remote_ip;
     /// dst port
-    uint16_t dst_port;
+    uint16_t remote_port;
+    /// protocol
+    def::transport_protocol protocol;
 };
 
 /**
@@ -88,12 +107,12 @@ struct hash_sock_get_key {
     * @param[in] sock socket
     * @return hash result
     */
-    size_t operator() (const sock_key& sock) const {
+    size_t operator() (const sock_key::ptr sock) const {
         // get port
-        uint32_t port = (sock.src_port << 16) + sock.dst_port;
-        auto key = jhash_3words(sock.src_ip, sock.dst_ip, port);
-        std::cout << "hask key, " << sock.src_ip << ":" << sock.src_port
-            << " -> " << sock.dst_ip << ":" << sock.dst_port
+        uint32_t port = (sock->local_port << 16) + sock->remote_port;
+        auto key = jhash_3words(sock->local_ip, sock->remote_ip, port);
+        std::cout << "hask key, " << sock->local_port << ":" << sock->local_port
+            << " -> " << sock->remote_ip << ":" << sock->remote_port
             << ", port: " << port << ", result: " << key << std::endl;
         return key;
     }
@@ -113,11 +132,14 @@ struct hash_sock_equal_key {
     * @param[in] second socket
     * @return hash result
     */
-    bool operator() (const sock_key& first, const sock_key& second) const {
+    bool operator() (const sock_key::ptr first, const sock_key::ptr second) const {
         // all connection info should equal
-        if (first.src_ip == second.src_ip && first.src_port == second.src_port
-            && first.dst_ip == second.dst_ip && first.dst_port == second.dst_port)
-            return true;
+        if (first->local_port == second->local_port && first->remote_ip == second->remote_ip 
+            && first->remote_port == second->remote_port) {
+            // check if local ip match
+            if (first->local_ip == 0 || (first->local_ip == second->local_ip))
+                return true;
+        }
         return false;
     }
 };
@@ -131,7 +153,7 @@ class sock_table;
  * @copyright Copyright (c) 2024 aris All rights reserved
  * @link https://datatracker.ietf.org/doc/html/rfc792
  */
-struct sock {
+struct sock : std::enable_shared_from_this<sock> {
     friend class sock_table;
     typedef std::shared_ptr<sock> ptr;
 public:
@@ -152,7 +174,7 @@ public:
     * @brief get buffer from write queue
     * @return queue from sock
     */
-    sk_buff::ptr read_buffer_from_queue();
+    flow::sk_buff::ptr read_buffer_from_queue();
 
     /**
     * @brief check if hash key is the same
@@ -166,7 +188,7 @@ public:
     * @brief write data to sock
     * @param[in] buffer write buf
     */ 
-    void write_buffer_to_queue(sk_buff::ptr buffer);
+    void write_buffer_to_queue(flow::sk_buff::ptr buffer);
 
 public:
     /// sock key store src dst info
@@ -174,13 +196,13 @@ public:
     /// sock table
     std::weak_ptr<sock_table> table;
     /// write buffer queue
-    std::queue<sk_buff::ptr> write_queue;
+    std::queue<flow::sk_buff::ptr> write_queue;
     /// write buffer condition
     std::condition_variable_any write_cond;
     /// write share lock 
     std::mutex write_mutex;
     /// read buffer queue
-    std::queue<sk_buff::ptr> read_queue;
+    std::queue<flow::sk_buff::ptr> read_queue;
     /// read buffer condition
     std::condition_variable_any read_cond;
     /// read share lock
@@ -210,7 +232,7 @@ private:
  * @copyright Copyright (c) 2024 aris All rights reserved
  * @link https://datatracker.ietf.org/doc/html/rfc792
  */
-class sock_table {
+class sock_table : std::enable_shared_from_this<sock_table> {
 public:
     typedef std::shared_ptr<sock_table> ptr;
 
@@ -228,7 +250,21 @@ public:
     * @param[in] dst_port dst port
     * @return sock 
     */
-    sock::ptr create_sock(uint32_t src_ip, uint16_t src_port, uint32_t dst_ip, uint16_t dst_port);
+    sock::ptr sock_create(sock_key::ptr key);
+
+    /**
+    * @brief get sock
+    * @param[in] key sock key
+    * @return sock 
+    */    
+    sock::ptr sock_get(sock_key::ptr key);
+
+    /**
+    * @brief delete sock
+    * @param[in] key sock key
+    * @return sock 
+    */    
+    void sock_delete(sock_key::ptr key);
 
 private:
     /**
@@ -237,10 +273,83 @@ private:
     sock_table();
 
 private:
+    /// sock mutex
+    std::shared_mutex sock_mutex_;
     /// socket map to get socket
     std::unordered_map<sock_key::ptr, sock::ptr, hash_sock_get_key, hash_sock_equal_key> sock_map_;
 };
 
+/**
+ * @file sock.hpp
+ * @brief create fd table
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ * @link https://datatracker.ietf.org/doc/html/rfc792
+ */
+class fd_table {
+public:
+    typedef std::shared_ptr<fd_table> ptr;
+
+    /**
+    * @brief create fd table
+    * @return fd table
+    */
+    static fd_table::ptr create();
+
+    /**
+    * @brief create fd 
+    * @param[in] protocol transport protocol
+    * @return sock 
+    */
+    uint32_t fd_create(def::transport_protocol protocol);
+
+    /**
+    * @brief delete fd 
+    * @param[in] fd fd key
+    * @return delete result
+    */
+    bool fd_delete(uint32_t fd);
+
+    /**
+    * @brief get sock key from fd
+    * @param[in] fd fd 
+    * @return get result
+    */
+    sock_key::ptr sock_key_get(uint32_t fd);
+
+    /**
+    * @brief connect
+    * @param[in] fd fd 
+    * @return true if connect success
+    */
+    bool connect(uint32_t fd, struct sockaddr_in& addr);
+
+    /**
+    * @brief bind
+    * @param[in] fd fd 
+    * @return true if bind success
+    */
+    bool bind(uint32_t fd, struct sockaddr_in& addr);
+
+private:
+    /**
+    * @brief create fd table
+    */
+    fd_table();
+
+private:
+    /// current fd number 
+    /// TODO: should use bit map here
+    std::atomic<uint32_t> fd_num_ {3};
+    /// port number
+    std::atomic<uint16_t> port_num_ { 2000 };
+    /// share mutex
+    std::shared_mutex fd_mutex_;
+    /// fd table
+    std::unordered_map<uint32_t, sock_key::ptr> fd_table_;
+};
+
 }
+
 
 #endif // __SOCK_H__

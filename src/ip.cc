@@ -49,10 +49,6 @@ bool ip::pack_flow(flow::sk_buff::ptr buffer) {
     hdr->head_checksum = ntohs(flow::compute_checksum(buffer));
     buffer->data_tail = data_tail;
     buffer->protocol = uint16_t(def::network_protocol::ip);
-    if (stack_.expired())
-        return false;
-    auto stack = stack_.lock();
-    stack->write_to_device(buffer);
     return true;
 }
 

@@ -108,6 +108,30 @@ struct network_handler {
     virtual bool unpack_flow(flow::sk_buff::ptr skb) = 0;
 };
 
+struct transport_handler {
+    typedef std::shared_ptr<transport_handler> ptr;
+
+    /**
+     * @brief package protocol
+     * @return return network layer protocol
+     */    
+    virtual def::transport_protocol get_protocol() = 0;
+
+    /**
+     * @brief package flow
+     * @param[in] skb sk buffer
+     * @return return if package is valid, like checksum failed
+     */    
+    virtual bool pack_flow(flow::sk_buff::ptr skb) = 0;
+
+    /**
+     * @brief unpackage flow
+     * @param[in] skb sk buffer
+     * @return return if package is valid, like checksum failed
+     */        
+    virtual bool unpack_flow(flow::sk_buff::ptr skb) = 0;
+};
+
 
 /**
  * @file interface.hpp
@@ -138,6 +162,9 @@ public:
      * @param[in] handler network handler
      */
     virtual void register_network_handler(interface::network_handler::ptr handler) = 0;
+
+
+    virtual void register_transport_handler(interface::transport_handler::ptr handler) = 0;
 
     /**
      * @brief write to device
