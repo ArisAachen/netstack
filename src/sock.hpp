@@ -38,16 +38,13 @@ static uint32_t rol32(uint32_t word, unsigned int shift)
  * @return hash result
  */
 #define jhash_final(first, second, third)                             \
-{                                                                     \
     third ^= second; third -= rol32(second, 14);                      \
     first ^= third; first -= rol32(third, 11);                        \
     second ^= first; second -= rol32(first, 15);                      \
     third ^= second; third -= rol32(second, 16);                      \
     first ^= third; first -= rol32(third, 4);                         \
     second ^= first; second -= rol32(first, 14);                      \
-    third ^= second; third -= rol32(second, 24);                      \
-    return 0;                                                         \
-}
+    third ^= second; third -= rol32(second, 24);
 
 /**
  * @brief get jenkins hash

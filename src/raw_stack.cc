@@ -138,11 +138,18 @@ void raw_stack::handle_packege() {
                     continue;
                 // search for socket
                 if (def::transport_protocol(buffer->protocol) == def::transport_protocol::udp) {
-                    auto sock = udp_sock_table_->sock_get(buffer->key);
-                    if (sock != nullptr)
-                        sock->write_buffer_to_queue(buffer);
-                    else
-                        std::cout << "udp sock recv unsaved package" << std::endl;
+                    // get full key
+                    auto key = buffer->key;
+                    auto sock = udp_sock_table_->sock_get(key);
+                    if (sock == nullptr) {
+                        sock = udp_sock_table_->sock_get(std::make_shared<flow_table::sock_key>(0, key->local_port, 
+                            0, 0, def::transport_protocol::udp));
+                    }
+                    if (sock == nullptr) {
+                        std::cout << "recv udp sock unsaved" << std::endl;
+                        continue;
+                    }
+                    sock->write_buffer_to_queue(buffer);
                 } else if (def::transport_protocol(buffer->protocol) == def::transport_protocol::tcp) {
                     std::cout << "current sock is tcp protocol" << std::endl;
                 }

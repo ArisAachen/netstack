@@ -121,7 +121,6 @@ void macvlan_device::read_thread() {
         } else if (size == 0) {
             std::cout << "read macvlan buffer end" << std::endl;
         }
-        std::cout << "macvlan size: " << std::dec << size << std::endl;
         // get ether mac 
         const flow::ether_hdr* hdr = reinterpret_cast<const flow::ether_hdr*>(buf);
         // check if should ignore
