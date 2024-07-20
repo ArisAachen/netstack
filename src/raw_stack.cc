@@ -80,6 +80,7 @@ void raw_stack::write_to_device(flow::sk_buff::ptr buffer) {
 void raw_stack::run() {
     handle_packege();
     run_read_device();
+    handle_sock_buffer_package();
 }
 
 // wait signal to end
@@ -165,6 +166,9 @@ void raw_stack::handle_sock_buffer_package() {
         while (true) {
             // read buffer from sock
             auto buffer = udp_sock_table_->read_buffer();
+            // maybe timeout
+            if (buffer == nullptr)
+                continue;
             if (!write_transport_package(buffer))
                 continue;
             if (!write_network_package(buffer))

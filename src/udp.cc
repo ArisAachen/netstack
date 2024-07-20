@@ -27,9 +27,12 @@ def::transport_protocol udp::get_protocol() {
 
 bool udp::pack_flow(flow::sk_buff::ptr buffer) {
     auto key = buffer->key;
-   // set src and dst
-   buffer->src = key->local_ip;
-   buffer->dst = key->remote_ip; 
+    auto local_ip = key->local_ip;
+    // set src and dst
+    if (local_ip == 0)
+        local_ip = def::global_def_ip;
+    buffer->src = local_ip;
+    buffer->dst = key->remote_ip; 
     // get hdr
     flow::skb_push(buffer, sizeof(struct flow::udp_hdr));
     // get udp data len 
@@ -44,7 +47,7 @@ bool udp::pack_flow(flow::sk_buff::ptr buffer) {
     // add fake udp header
     flow::skb_push(buffer, sizeof(struct flow::udp_fake_hdr));
     auto fake_hdr = reinterpret_cast<flow::udp_fake_hdr*>(buffer->get_data());
-    fake_hdr->src_ip = htonl(key->local_ip);
+    fake_hdr->src_ip = htonl(local_ip);
     fake_hdr->dst_ip = htonl(key->remote_ip);
     fake_hdr->reserve = 0;
     fake_hdr->protocol = uint8_t(def::transport_protocol::udp);
@@ -53,7 +56,7 @@ bool udp::pack_flow(flow::sk_buff::ptr buffer) {
     hdr->udp_checksum = htons(flow::compute_checksum(buffer));
     // drop fake header
     flow::skb_pull(buffer, sizeof(struct flow::udp_fake_hdr));
-    return false;
+    return true;
 }
 
 // unpack udp flow
@@ -65,10 +68,6 @@ bool udp::unpack_flow(flow::sk_buff::ptr buffer) {
     // get msg
     auto msg_len = ntohs(hdr->total_len) - sizeof(struct flow::udp_hdr);
     flow::skb_pull(buffer, sizeof(struct flow::udp_hdr));
-    // copy message
-    auto msg = std::string(buffer->get_data(), msg_len);
-    std::cout << "rcv udp message, " << std::dec << ntohs(hdr->src_port) << " -> " 
-        << ntohs(hdr->dst_port) << ", msg: " << msg << std::endl;
     auto local_ip = std::get<uint32_t>(buffer->dst);
     auto local_port = ntohs(hdr->dst_port);
     auto remote_ip = std::get<uint32_t>(buffer->src);
@@ -77,6 +76,10 @@ bool udp::unpack_flow(flow::sk_buff::ptr buffer) {
     buffer->key = flow_table::sock_key::ptr(new flow_table::sock_key(local_ip, local_port, 
         remote_ip, remote_port, def::transport_protocol::udp));
     buffer->protocol = uint16_t(def::transport_protocol::udp);
+    // copy message
+    auto msg = std::string(buffer->get_data(), msg_len);
+    std::cout << "rcv udp message, " << std::dec << remote_port << " -> " 
+        << local_port << ", msg: " << msg << std::endl;
     return true;
 }
 

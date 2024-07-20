@@ -108,9 +108,6 @@ struct hash_sock_get_key {
         // get port
         uint32_t port = (sock->local_port << 16) + sock->remote_port;
         auto key = jhash_3words(sock->local_ip, sock->remote_ip, port);
-        std::cout << "hask key, " << std::hex << sock->local_ip << ":" << std::dec << sock->local_port
-            << " -> " << std::hex << sock->remote_ip << ":" << std::dec << sock->remote_port
-            << std::hex << ", result: " << key << std::endl;
         return key;
     }
 };

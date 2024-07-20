@@ -406,6 +406,15 @@ static void skb_reserve(sk_buff::ptr buffer, size_t offset) {
 }
 
 /**
+ * @brief reset buffer 
+ * @param[in] buffer buffer
+ * @param[in] len len
+ */
+static void skb_reset(sk_buff::ptr buffer, size_t len) {
+    memset(buffer->get_data(), 0, len);
+}
+
+/**
  * @brief release buffer
  * @param[in] buffer buffer
  */

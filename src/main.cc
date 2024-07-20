@@ -34,12 +34,18 @@ void udp_server() {
     memset(&remote_addr, 0, sizeof(struct sockaddr_in));
     socklen_t sock_len = 0;
     while (true) {
-        auto size = stack_readfrom(fd, buf, udp_buf_size, (struct sockaddr*)&remote_addr, &sock_len);
-        if (size < 0) {
+        auto read_size = stack_readfrom(fd, buf, udp_buf_size, (struct sockaddr*)&remote_addr, &sock_len);
+        if (read_size < 0) {
             std::cout << "user read from stack failed" << std::endl;
             return;
         }
-        std::cout << "user read from stack success, buf: " << std::string(buf, size) << ", size: " << size << std::endl;
+        std::cout << "user read from stack success, buf: " << std::string(buf, read_size) << ", size: " << read_size << std::endl;
+        auto write_size = stack_writeto(fd, buf, read_size, (struct sockaddr*)&remote_addr, sock_len);
+        if (write_size < 0) {
+            std::cout << "user write to stack failed" << std::endl;
+            return;
+        }
+        std::cout << "user write to stack success, buf: " << std::string(buf, write_size) << ", size: " << read_size << std::endl;
     }
 }
 

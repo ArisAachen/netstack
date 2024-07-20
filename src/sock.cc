@@ -15,7 +15,7 @@
 namespace flow_table {
 
 sock::sock(sock_key::ptr key, std::weak_ptr<sock_table> table) 
-    : key(key), table(table) {
+    : key(key), table(table), protocol(key->protocol) {
 }
 
 // read buffer from sock
@@ -97,9 +97,9 @@ size_t sock::writeto(char* buf, size_t size, struct sockaddr* addr, socklen_t le
     // get front
     std::unique_lock<std::mutex> lock(write_mutex);
     auto offset_size = 0;
-    if (protocol == def::transport_protocol::tcp) {
+    if (key->protocol == def::transport_protocol::tcp) {
         offset_size = flow::get_max_tcp_data_offset();
-    } else if (protocol == def::transport_protocol::udp) {
+    } else if (key->protocol == def::transport_protocol::udp) {
         offset_size = flow::get_max_udp_data_offset();
     }
     // get remote ip and port
@@ -110,11 +110,12 @@ size_t sock::writeto(char* buf, size_t size, struct sockaddr* addr, socklen_t le
     // alloc buffer size
     flow::sk_buff::ptr buffer = flow::sk_buff::alloc(offset_size + size);
     buffer->key = send_key;
+    buffer->protocol = uint16_t(buffer->key->protocol);
     skb_reserve(buffer, offset_size);
     // copy to buffer
     buffer->store_data(buf, size);
     flow::skb_put(buffer, size);
-    read_queue.push(buffer);
+    write_queue.push(buffer);
     write_cond.notify_one();
     return size;
 }
