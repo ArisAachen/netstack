@@ -111,9 +111,9 @@ struct hash_sock_get_key {
         // get port
         uint32_t port = (sock->local_port << 16) + sock->remote_port;
         auto key = jhash_3words(sock->local_ip, sock->remote_ip, port);
-        std::cout << "hask key, " << sock->local_port << ":" << sock->local_port
-            << " -> " << sock->remote_ip << ":" << sock->remote_port
-            << ", port: " << port << ", result: " << key << std::endl;
+        std::cout << "hask key, " << std::hex << sock->local_ip << ":" << std::dec << sock->local_port
+            << " -> " << std::hex << sock->remote_ip << ":" << std::dec << sock->remote_port
+            << std::hex << ", result: " << key << std::endl;
         return key;
     }
 };
@@ -136,11 +136,13 @@ struct hash_sock_equal_key {
         // check protocol
         if (first->protocol != second->protocol)
             return false;
-        if (first->local_ip != 0 && first->local_ip != second->local_ip)
+        if (first->local_ip != 0 && second->local_ip != 0 && first->local_ip != second->local_ip)
             return false;
-        if (first->remote_ip != 0 && second->remote_ip != second->remote_ip)
+        if (first->remote_ip != 0 && second->remote_ip != 0 && second->remote_ip != second->remote_ip)
             return false;
-        if (first->local_port != second->local_port || first->remote_port != second->remote_port)
+        if (first->remote_port != 0 && second->remote_port != 0 && first->remote_port == second->remote_port)
+            return false;
+        if (first->local_port != second->local_port)
             return false;
         return true;
     }

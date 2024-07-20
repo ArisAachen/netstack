@@ -62,7 +62,7 @@ bool arp::handle_arp_request(flow::sk_buff::ptr buffer) {
     std::cout << "handle arp request, src: " << utils::generic::format_ip_address(ntohl(req_hdr->src_ip))
         << ", dst: " << utils::generic::format_ip_address(ntohl(req_hdr->dst_ip)) << std::endl;
     // create response buffer
-    size_t size = sizeof(struct flow::arp_hdr) + flow::get_ether_offset();
+    size_t size = def::max_arp_header + def::max_ether_header;
     flow::sk_buff::ptr resp_buffer = flow::sk_buff::alloc(size);
     resp_buffer->data_len = size;
     flow::skb_reserve(resp_buffer, def::max_ether_header + def::max_arp_header);

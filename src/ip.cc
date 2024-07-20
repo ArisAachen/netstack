@@ -66,6 +66,8 @@ bool ip::unpack_flow(flow::sk_buff::ptr buffer) {
     buffer->src = ntohl(hdr->src_ip);
     buffer->dst = ntohl(hdr->dst_ip);
     flow::skb_pull(buffer, sizeof(struct flow::ip_hdr));
+    // get real offset here
+    flow::skb_put(buffer, htons(hdr->total_len));
 
     return true;
 }

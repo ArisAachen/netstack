@@ -121,6 +121,7 @@ void macvlan_device::read_thread() {
         } else if (size == 0) {
             std::cout << "read macvlan buffer end" << std::endl;
         }
+        std::cout << "macvlan size: " << std::dec << size << std::endl;
         // get ether mac 
         const flow::ether_hdr* hdr = reinterpret_cast<const flow::ether_hdr*>(buf);
         // check if should ignore
@@ -129,13 +130,11 @@ void macvlan_device::read_thread() {
             continue;
         // malloc flow
         flow::sk_buff::ptr skb = flow::sk_buff::alloc(size);
-        // set tail and block end
-        flow::skb_put(skb, size);
         // copy buffer
         skb->protocol = htons(hdr->protocol);
         skb->dev = weak_from_this();
         skb->store_data(buf, size);
-        flow::skb_pull(skb, flow::get_ether_offset());
+        flow::skb_reserve(skb, flow::get_ether_offset());
         // push to queue
         std::lock_guard<std::mutex> lock(read_mutex_);
         read_head_.push(skb);

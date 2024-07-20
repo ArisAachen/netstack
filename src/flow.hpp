@@ -104,9 +104,6 @@ struct sk_buff {
     void store_data(char* buf, size_t size) {
         std::copy(buf, buf + size, data + data_begin);
         data_len += size;
-        // check if need update tail
-        if (data_begin + size > data_tail)
-            data_tail = data_begin + size;
     }
 
     /**
