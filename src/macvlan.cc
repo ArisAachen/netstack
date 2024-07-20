@@ -159,7 +159,7 @@ void macvlan_device::write_thread() {
             write_head_.pop();
         }
         // write buffer to device
-        size_t size = write(macvlan_fd_, buffer->get_data(), buffer->data_len);
+        size_t size = write(macvlan_fd_, buffer->get_data(), buffer->get_data_len());
         if (size < 0) {
             std::cout << "write macvlan buffer failed" << std::endl;
             break;

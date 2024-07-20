@@ -67,12 +67,11 @@ bool icmp::handle_icmp_echo_request(flow::sk_buff::ptr req_buffer) {
     resp_buffer->dev = req_buffer->dev;
     resp_buffer->stack = stack_;
     // set tail
-    flow::skb_put(resp_buffer, total_len);
+    flow::skb_reserve(resp_buffer, total_len);
+    flow::skb_push(resp_buffer, buf_len + sizeof(struct flow::icmp_echo_body));
     // copy request src ip to response dst ip
     resp_buffer->src = std::get<uint32_t>(req_buffer->dst);
     resp_buffer->dst = std::get<uint32_t>(req_buffer->src);
-    // offset to echo response header
-    flow::skb_pull(resp_buffer, flow::get_icmp_offset());
     auto icmp_echo_body = reinterpret_cast<struct flow::icmp_echo_body*>(resp_buffer->get_data());
     if (icmp_echo_body == nullptr)
         std::cout << "icmp echo body is invalid" << std::endl;

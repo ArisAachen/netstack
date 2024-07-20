@@ -133,14 +133,16 @@ struct hash_sock_equal_key {
     * @return hash result
     */
     bool operator() (const sock_key::ptr first, const sock_key::ptr second) const {
-        // all connection info should equal
-        if (first->local_port == second->local_port && first->remote_ip == second->remote_ip 
-            && first->remote_port == second->remote_port) {
-            // check if local ip match
-            if (first->local_ip == 0 || (first->local_ip == second->local_ip))
-                return true;
-        }
-        return false;
+        // check protocol
+        if (first->protocol != second->protocol)
+            return false;
+        if (first->local_ip != 0 && first->local_ip != second->local_ip)
+            return false;
+        if (first->remote_ip != 0 && second->remote_ip != second->remote_ip)
+            return false;
+        if (first->local_port != second->local_port || first->remote_port != second->remote_port)
+            return false;
+        return true;
     }
 };
 
@@ -171,6 +173,16 @@ public:
     size_t write(char* buf, size_t size);
 
     /**
+    * @brief write data to sock
+    * @param[in] buf write buf
+    * @param[in] size write size
+    * @param[in] addr write addr
+    * @param[in] len addr len
+    * @return write size
+    */
+    size_t writeto(char* buf, size_t size, struct sockaddr* addr, socklen_t len);
+
+    /**
     * @brief get buffer from write queue
     * @return queue from sock
     */
@@ -183,6 +195,16 @@ public:
     * @return read data from sock
     */
     size_t read(char* buf, size_t size);
+
+    /**
+     * @brief read buf from stack
+     * @param[in] buf buffer
+     * @param[in] size buf len
+     * @param[in] addr recv addr
+     * @param[in] len addr len
+     * @return read size
+     */
+    size_t readfrom(char* buf, size_t size, struct sockaddr* addr, socklen_t* len);
 
     /**
     * @brief write data to sock
@@ -256,15 +278,21 @@ public:
     * @brief get sock
     * @param[in] key sock key
     * @return sock 
-    */    
+    */
     sock::ptr sock_get(sock_key::ptr key);
 
     /**
     * @brief delete sock
     * @param[in] key sock key
     * @return sock 
-    */    
+    */
     void sock_delete(sock_key::ptr key);
+
+    /**
+    * @brief read buffer from frame
+    * @return buffer 
+    */
+    flow::sk_buff::ptr read_buffer();
 
 private:
     /**

@@ -8,8 +8,11 @@
 #include "interface.hpp"
 #include "sock.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <thread>
 #include <unordered_map>
 #include <utility>
@@ -120,6 +123,88 @@ public:
      */
     virtual ~raw_stack();
 
+public:
+    /**
+     * @brief create sock fd
+     * @param[in] domain sock domain,
+     * @param[in] type sock type,
+     * @param[in] protocol sock protocol,
+     * @return sock fd
+     */
+    virtual uint32_t sock_create(int domain, int type, int protocol);
+
+    /**
+     * @brief delete sock fd
+     * @param[in] fd sock fd
+     * @return delete fd success
+     */
+    virtual bool sock_delete(uint32_t fd);
+
+    /**
+     * @brief connect sock fd
+     * @param[in] fd sock fd,
+     * @param[in] addr remote addr,
+     * @param[in] len addr len,
+     * @return sock fd
+     */
+    virtual bool connect(uint32_t fd, struct sockaddr* addr, socklen_t len);
+
+    /**
+     * @brief close sock fd
+     * @param[in] fd sock fd,
+     * @return sock fd
+     */
+    virtual bool close(uint32_t fd);
+
+    /**
+     * @brief bind sock fd
+     * @param[in] fd sock fd,
+     * @param[in] addr remote addr,
+     * @param[in] len addr len,
+     * @return sock fd
+     */
+    virtual bool bind(uint32_t fd, struct sockaddr* addr, socklen_t len);
+
+    /**
+     * @brief write buf to stack
+     * @param[in] fd sock fd
+     * @param[in] buf buffer
+     * @param[in] size buf len
+     * @return write size
+     */
+    virtual size_t write(uint32_t fd, char* buf, size_t size);
+
+    /**
+     * @brief read buf from stack
+     * @param[in] fd sock fd
+     * @param[in] buf buffer
+     * @param[in] size buf len
+     * @return read size
+     */
+    virtual size_t read(uint32_t fd, char* buf, size_t size);
+
+    /**
+     * @brief read buf from stack
+     * @param[in] fd sock fd
+     * @param[in] buf buffer
+     * @param[in] size buf len
+     * @param[in] addr recv addr
+     * @param[in] len addr len
+     * @return read size
+     */
+    virtual size_t readfrom(uint32_t fd, char* buf, size_t size, struct sockaddr* addr, socklen_t* len);
+
+    /**
+     * @brief write buf to stack
+     * @param[in] fd sock fd
+     * @param[in] buf buffer
+     * @param[in] size buf len
+     * @param[in] addr recv addr
+     * @param[in] len addr len
+     * @return read size
+     */
+    virtual size_t writeto(uint32_t fd, char* buf, size_t size, struct sockaddr* addr, socklen_t len);
+
 private:
     /**
      * @brief create raw_stack
@@ -135,6 +220,11 @@ private:
      * @brief parse packet 
      */
     void handle_packege();
+
+    /**
+     * @brief parse packet 
+     */
+    void handle_sock_buffer_package();
 
 private:
     /// network handler map

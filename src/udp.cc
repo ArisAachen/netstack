@@ -26,7 +26,33 @@ def::transport_protocol udp::get_protocol() {
 }
 
 bool udp::pack_flow(flow::sk_buff::ptr buffer) {
-
+    auto key = buffer->key;
+   // set src and dst
+   buffer->src = key->local_ip;
+   buffer->dst = key->remote_ip; 
+    // get hdr
+    flow::skb_push(buffer, sizeof(struct flow::udp_hdr));
+    // get udp data len 
+    auto len = buffer->get_data_len();
+    // fix header
+    auto hdr = reinterpret_cast<flow::udp_hdr*>(buffer->get_data());
+    hdr->src_port = htons(key->local_port);
+    hdr->dst_port = htons(key->remote_port);
+    hdr->total_len = htons(len);
+    // set checksum
+    hdr->udp_checksum = 0;
+    // add fake udp header
+    flow::skb_push(buffer, sizeof(struct flow::udp_fake_hdr));
+    auto fake_hdr = reinterpret_cast<flow::udp_fake_hdr*>(buffer->get_data());
+    fake_hdr->src_ip = htonl(key->local_ip);
+    fake_hdr->dst_ip = htonl(key->remote_ip);
+    fake_hdr->reserve = 0;
+    fake_hdr->protocol = uint8_t(def::transport_protocol::udp);
+    fake_hdr->total_len = htons(len);
+    // get checksum 
+    hdr->udp_checksum = htons(flow::compute_checksum(buffer));
+    // drop fake header
+    flow::skb_pull(buffer, sizeof(struct flow::udp_fake_hdr));
     return false;
 }
 
@@ -51,7 +77,7 @@ bool udp::unpack_flow(flow::sk_buff::ptr buffer) {
     buffer->key = flow_table::sock_key::ptr(new flow_table::sock_key(local_ip, local_port, 
         remote_ip, remote_port, def::transport_protocol::udp));
     buffer->protocol = uint16_t(def::transport_protocol::udp);
-    return false;
+    return true;
 }
 
 bool udp::write_buffer_to_sock(flow::sk_buff::ptr buffer) {

@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
@@ -64,7 +65,8 @@ bool arp::handle_arp_request(flow::sk_buff::ptr buffer) {
     size_t size = sizeof(struct flow::arp_hdr) + flow::get_ether_offset();
     flow::sk_buff::ptr resp_buffer = flow::sk_buff::alloc(size);
     resp_buffer->data_len = size;
-    flow::skb_pull(resp_buffer, flow::get_ether_offset());
+    flow::skb_reserve(resp_buffer, def::max_ether_header + def::max_arp_header);
+    flow::skb_push(resp_buffer, def::max_arp_header);
     // create response header
     struct flow::arp_hdr* resp_hdr = reinterpret_cast<struct flow::arp_hdr*>(resp_buffer->get_data());
     resp_hdr->hardware_type = req_hdr->hardware_type;
@@ -128,10 +130,11 @@ bool arp::handle_arp_response(flow::sk_buff::ptr buffer) {
 // send arp request
 bool arp::send_arp_request(uint32_t ip, interface::net_device::ptr dev) {
     // create buffer
-    auto package_len = sizeof(struct flow::arp_hdr) + sizeof(struct flow::ether_hdr);
+    auto package_len = def::max_arp_header + def::max_ether_header;
     auto buffer = flow::sk_buff::alloc(package_len);
+    flow::skb_reserve(buffer, package_len);
+    flow::skb_push(buffer, def::max_arp_header);
     buffer->data_len = package_len;
-    flow::skb_pull(buffer, sizeof(struct flow::ether_hdr));
     // create arp header
     auto hdr = reinterpret_cast<struct flow::arp_hdr*>(buffer->get_data());
     std::cout << "arp begin: " << buffer->data_begin << ", offset: " << sizeof(struct flow::ether_hdr) << std::endl;
@@ -172,6 +175,10 @@ bool arp::send_arp_request(uint32_t ip, interface::net_device::ptr dev) {
 
 
 namespace flow_table {
+
+neighbor_table::ptr neighbor_table::create() {
+    return neighbor_table::ptr(new neighbor_table());
+}
 
 neighbor_table::neighbor_table() {
 

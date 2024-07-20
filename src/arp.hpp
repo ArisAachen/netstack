@@ -146,10 +146,11 @@ public:
 class neighbor_table {
 public:
     typedef std::shared_ptr<neighbor_table> ptr;
+
     /**
      * @brief create neighbor table
      */
-    neighbor_table();
+    static neighbor_table::ptr create();
 
     /**
      * @brief release neighbor table
@@ -175,6 +176,12 @@ public:
      * @return return if neigh device exist
      */
     virtual std::optional<neighbor::ptr> get(uint32_t key);
+
+private:    
+    /**
+     * @brief create neighbor table
+     */
+    neighbor_table();
 
 private:
     /// share lock 

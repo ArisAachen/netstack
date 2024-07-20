@@ -162,6 +162,9 @@ const uint8_t checksum_sperate_base = 16;
 // checksum max num
 const uint16_t checksum_max_num = 0xffff;
 
+// max arp header
+const uint8_t max_arp_header = 28;
+
 // max ip header
 const uint8_t max_ip_header = 60;
 
@@ -171,8 +174,11 @@ const uint8_t max_ether_header = 14;
 // max tcp header
 const uint8_t max_tcp_header = 60;
 
-// max udp header
-const uint8_t max_udp_header = 8;
+// max udp header should include fake header
+const uint8_t max_udp_header = 8 + 12;
+
+// max transport wait time
+const uint8_t max_transport_wait_time = 10;
 }
 
 #endif // __DEF_H__

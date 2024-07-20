@@ -6,14 +6,22 @@
 #include "interface.hpp"
 #include "ip.hpp"
 #include "macvlan.hpp"
+#include "sock.hpp"
 #include "udp.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
-#include <netinet/in.h>
-#include <sys/types.h>
+#include <memory>
+#include <thread>
+#include <utility>
 #include <variant>
+
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+
 
 namespace stack {
 
@@ -24,7 +32,9 @@ raw_stack::ptr raw_stack::get_instance() {
 }
 
 raw_stack::raw_stack() {
-    neighbor_table_ = std::make_shared<flow_table::neighbor_table>();
+    neighbor_table_ = flow_table::neighbor_table::create();
+    udp_sock_table_ = flow_table::sock_table::create();
+    fd_table_ = flow_table::fd_table::create();
 }
 
 // init raw_stack
@@ -126,10 +136,36 @@ void raw_stack::handle_packege() {
                 }
                 if (!handle_transport_package(buffer))
                     continue;
+                // search for socket
+                if (def::transport_protocol(buffer->protocol) == def::transport_protocol::udp) {
+                    auto sock = udp_sock_table_->sock_get(buffer->key);
+                    if (sock != nullptr)
+                        sock->write_buffer_to_queue(buffer);
+                    else
+                        std::cout << "udp sock recv unsaved package" << std::endl;
+                } else if (def::transport_protocol(buffer->protocol) == def::transport_protocol::tcp) {
+                    std::cout << "current sock is tcp protocol" << std::endl;
+                }
             }
         });
         thread_vec_.push_back(std::move(thread));
     }
+}
+
+// write transport package
+void raw_stack::handle_sock_buffer_package() {
+    auto thread = std::thread([&] {
+        while (true) {
+            // read buffer from sock
+            auto buffer = udp_sock_table_->read_buffer();
+            if (!write_transport_package(buffer))
+                continue;
+            if (!write_network_package(buffer))
+                continue;
+        }
+    });
+    thread_vec_.push_back(std::move(thread));
+    return;
 }
 
 // handle network package
@@ -159,14 +195,6 @@ bool raw_stack::handle_transport_package(flow::sk_buff::ptr buffer) {
     // check if key exist
     if (buffer->key == nullptr)
         return true;
-    // search for socket
-    if (def::transport_protocol(buffer->protocol) == def::transport_protocol::udp) {
-        auto sock = udp_sock_table_->sock_get(buffer->key);
-        if (sock != nullptr)
-            sock->write_buffer_to_queue(buffer);
-    } else if (def::transport_protocol(buffer->protocol) == def::transport_protocol::tcp) {
-        std::cout << "current sock is tcp protocol" << std::endl;
-    }
     return true;
 }
 
@@ -198,7 +226,14 @@ bool raw_stack::write_network_package(flow::sk_buff::ptr buffer) {
 
 // write transport package
 bool raw_stack::write_transport_package(flow::sk_buff::ptr buffer) {
-    return false;
+    // get network handler
+    auto handler = transport_handler_map_.find(def::transport_protocol(buffer->protocol));
+    if (handler == transport_handler_map_.end()) {
+        std::cout << "recv unknown transport protocol flow, protocol: " << std::hex << buffer->protocol << std::endl;
+        return false;
+    }
+    // handle flow
+    return handler->second->pack_flow(buffer);
 }
 
 raw_stack::~raw_stack() {
@@ -207,6 +242,126 @@ raw_stack::~raw_stack() {
     device_map_.clear();
     // release network handler map
     network_handler_map_.clear();
+}
+
+// create socket 
+uint32_t raw_stack::sock_create(int domain, int type, int protocol) {
+    if (type == SOCK_DGRAM) {
+       return fd_table_->fd_create(def::transport_protocol::udp); 
+    } 
+    return -1;
+}
+
+// delete socket
+bool raw_stack::sock_delete(uint32_t fd) {
+    auto key = fd_table_->sock_key_get(fd);
+    if (key == nullptr)
+        return false;
+    fd_table_->fd_delete(fd);
+    if (key->protocol == def::transport_protocol::udp) {
+        udp_sock_table_->sock_delete(key);
+    } else {
+        std::cout << "delete unknown protocol key, protocol: " << uint16_t(key->protocol) << std::endl;
+    }
+    return true;
+}
+
+// 
+bool raw_stack::connect(uint32_t fd, struct sockaddr* addr, socklen_t len) {
+    return false;
+}
+
+// close fd
+bool raw_stack::close(uint32_t fd) {
+    auto key = fd_table_->sock_key_get(fd);
+    if (key == nullptr)
+        return false;
+    if (key->protocol == def::transport_protocol::udp)
+        udp_sock_table_->sock_delete(key);
+    return true;
+}
+
+// bind fd
+bool raw_stack::bind(uint32_t fd, struct sockaddr* addr, socklen_t len) {
+    auto local_addr = reinterpret_cast<const struct sockaddr_in*>(addr);
+    auto key = fd_table_->sock_key_get(fd);
+    if (key == nullptr)
+        return false;
+    if (key->protocol == def::transport_protocol::udp) {
+        if (local_addr->sin_addr.s_addr != 0)
+            key->local_ip = ntohl(local_addr->sin_addr.s_addr);
+        key->local_port = ntohs(local_addr->sin_port);
+        udp_sock_table_->sock_create(key);
+    }
+    return true;
+}
+
+// read buffer from stack
+size_t raw_stack::read(uint32_t fd, char* buf, size_t size) {
+    auto key = fd_table_->sock_key_get(fd);
+    if (key == nullptr)
+        return false;
+    if (key->protocol == def::transport_protocol::udp) {
+        auto elem = udp_sock_table_->sock_get(key);
+        if (elem == nullptr) {
+            std::cout << "write fd failed, fd not exist, fd: " << fd << std::endl;
+            return -1; 
+        }
+        return elem->read(buf, size);
+    } 
+
+    return size;
+}
+
+// write buffer to stack
+size_t raw_stack::write(uint32_t fd, char* buf, size_t size) {
+    auto key = fd_table_->sock_key_get(fd);
+    if (key == nullptr)
+        return false;
+    if (key->protocol == def::transport_protocol::udp) {
+        auto elem = udp_sock_table_->sock_get(key);
+        if (elem == nullptr) {
+            std::cout << "write fd failed, fd not exist, fd: " << fd << std::endl;
+            return -1; 
+        }
+        return elem->write(buf, size);
+    } 
+
+    return size;
+}
+
+// read from stack
+size_t raw_stack::readfrom(uint32_t fd, char* buf, size_t size, struct sockaddr* addr, socklen_t* len) {
+    auto key = fd_table_->sock_key_get(fd);
+    if (key == nullptr)
+        return false;
+    if (key->protocol == def::transport_protocol::udp) {
+        auto elem = udp_sock_table_->sock_get(key);
+        if (elem == nullptr) {
+            std::cout << "write fd failed, fd not exist, fd: " << fd << std::endl;
+            return -1; 
+        }
+        return elem->readfrom(buf, size, addr, len);
+    } 
+
+    return size;
+}
+
+// read write to stack
+size_t raw_stack::writeto(uint32_t fd, char* buf, size_t size, struct sockaddr* addr, socklen_t len) {
+    auto key = fd_table_->sock_key_get(fd);
+    if (key == nullptr)
+        return false;
+    if (key->protocol == def::transport_protocol::udp) {
+        auto elem = udp_sock_table_->sock_get(key);
+        if (elem == nullptr) {
+            std::cout << "write fd failed, fd not exist, fd: " << fd << std::endl;
+            return -1; 
+        }
+        return elem->writeto(buf, size, addr, len);
+    } 
+
+    return size;
 }
 
 }

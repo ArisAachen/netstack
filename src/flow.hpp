@@ -352,6 +352,26 @@ struct udp_hdr {
 } __attribute__((packed));
 
 /**
+ * @file flow.hpp
+ * @brief udp header
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ * @link https://datatracker.ietf.org/doc/html/rfc792
+ */
+struct udp_fake_hdr {
+    /// source ip
+    uint32_t src_ip;
+    /// dst ip
+    uint32_t dst_ip;
+    /// reserve 0
+    uint8_t reserve;
+    /// udp protocol
+    uint8_t protocol;
+    /// total len
+    uint16_t total_len;
+};
+
+/**
  * @brief push buffer begin
  * @param[in] buffer buffer
  * @param[in] device device
