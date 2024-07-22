@@ -79,6 +79,20 @@ private:
      */
     bool ip_send(flow::sk_buff::ptr buffer);
 
+    /**
+     * @brief make package flow
+     * @param[in] skb sk buffer
+     * @return return if package is valid, like checksum failed
+     */
+    bool ip_make_flow(flow::sk_buff::ptr buffer, size_t offset, bool more_flag);
+
+    /**
+     * @brief fragment ip
+     * @param[in] skb sk buffer
+     * @return return if package is valid, like checksum failed
+     */
+    bool ip_fragment(flow::sk_buff::ptr buffer);
+
 private:
     /// stack
     interface::stack::weak_ptr stack_;

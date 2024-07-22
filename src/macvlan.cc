@@ -81,16 +81,11 @@ flow::sk_buff::ptr macvlan_device::read_from_device() {
 
 // write buffer to device
 int macvlan_device::write_to_device(flow::sk_buff::ptr buffer) {
-    // push to ether header
-    flow::skb_push(buffer, sizeof(struct flow::ether_hdr));
-    // create ether header
-    struct flow::ether_hdr* ether_hdr = reinterpret_cast<struct flow::ether_hdr*>(buffer->get_data());
-    ether_hdr->protocol = htons(buffer->protocol);
-    memccpy(ether_hdr->src, mac_address_, 0, def::mac_len);
-    memccpy(ether_hdr->dst, std::get<std::array<uint8_t, def::mac_len>>(buffer->dst).data(), 0, def::mac_len);
-    std::unique_lock<std::mutex> lock(write_mutex_);
-    write_head_.push(buffer);
-    write_cond_.notify_one();
+    append_buffer_to_write_queue(buffer);
+    if (!buffer->child_frags.empty()) {
+        for (auto iter : buffer->child_frags)
+            append_buffer_to_write_queue(iter);
+    }
     return 0;
 }
 
@@ -166,5 +161,20 @@ void macvlan_device::write_thread() {
         }
     }
 }
+
+// apend buffer
+void macvlan_device::append_buffer_to_write_queue(const flow::sk_buff::ptr buffer) {
+    // push to ether header
+    flow::skb_push(buffer, sizeof(struct flow::ether_hdr));
+    // create ether header
+    struct flow::ether_hdr* ether_hdr = reinterpret_cast<struct flow::ether_hdr*>(buffer->get_data());
+    ether_hdr->protocol = htons(buffer->protocol);
+    memccpy(ether_hdr->src, mac_address_, 0, def::mac_len);
+    memccpy(ether_hdr->dst, std::get<std::array<uint8_t, def::mac_len>>(buffer->dst).data(), 0, def::mac_len);
+    std::unique_lock<std::mutex> lock(write_mutex_);
+    write_head_.push(buffer);
+    write_cond_.notify_one();
+}
+
 
 }

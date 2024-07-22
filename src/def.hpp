@@ -144,6 +144,9 @@ const uint8_t ip_len = 4;
 // ip time to live
 const uint8_t ip_time_to_live = 64;
 
+// ip flag offset
+const uint8_t ip_flag_offset = 13;
+
 // ether package size
 const uint32_t flow_buffer_size = 65535;
 
@@ -158,6 +161,9 @@ const uint8_t checksum_div_base = 2;
 
 // compute checksum sperate base
 const uint8_t checksum_sperate_base = 16;
+
+// ip fragment offset base
+const uint8_t ip_frag_offset_base = 8;
 
 // checksum max num
 const uint16_t checksum_max_num = 0xffff;

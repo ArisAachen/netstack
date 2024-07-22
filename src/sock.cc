@@ -111,6 +111,7 @@ size_t sock::writeto(char* buf, size_t size, struct sockaddr* addr, socklen_t le
     flow::sk_buff::ptr buffer = flow::sk_buff::alloc(offset_size + size);
     buffer->key = send_key;
     buffer->protocol = uint16_t(buffer->key->protocol);
+    buffer->mtu = 1500;
     skb_reserve(buffer, offset_size);
     // copy to buffer
     buffer->store_data(buf, size);

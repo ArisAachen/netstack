@@ -56,6 +56,7 @@ bool udp::pack_flow(flow::sk_buff::ptr buffer) {
     hdr->udp_checksum = htons(flow::compute_checksum(buffer));
     // drop fake header
     flow::skb_pull(buffer, sizeof(struct flow::udp_fake_hdr));
+    buffer->data_len += sizeof(struct flow::udp_hdr);
     return true;
 }
 

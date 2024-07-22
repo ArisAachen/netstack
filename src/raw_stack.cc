@@ -63,7 +63,22 @@ void raw_stack::write_to_device(flow::sk_buff::ptr buffer) {
         memccpy(dst.data(), neigh.value()->mac_address, 0, def::mac_len);
         buffer->dst = dst;
     }
-
+    if (!buffer->child_frags.empty()) {
+        for (auto iter : buffer->child_frags) {
+            // look for dst mac address
+            if (std::holds_alternative<uint32_t>(iter->dst)) {
+                auto ip_address = std::get<uint32_t>(iter->dst);
+                auto neigh = neighbor_table_->get(ip_address);
+                if (!neigh.has_value()) {
+                    std::cout << "cant find neigh, ip: " << std::hex << ip_address << std::endl;
+                    return; 
+                }
+                std::array<uint8_t, def::mac_len> dst;
+                memccpy(dst.data(), neigh.value()->mac_address, 0, def::mac_len);
+                iter->dst = dst;
+            }
+        }
+    }
     // check if device exist
     if (!buffer->dev.expired()) {
         auto dev = buffer->dev.lock();

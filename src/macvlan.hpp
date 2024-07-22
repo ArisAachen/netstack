@@ -106,6 +106,13 @@ public:
     virtual bool user_device_status() { return false; };
 
 private:
+    /**
+     * @brief write buffer to write queue
+     * @param[in] buf macvlan_device device 
+     */
+    void append_buffer_to_write_queue(const flow::sk_buff::ptr buffer);
+
+private:
     /// device name
     std::string dev_name_;
     /// device address

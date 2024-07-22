@@ -4,6 +4,7 @@
 #include "def.hpp"
 
 #include <algorithm>
+#include <any>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -14,6 +15,7 @@
 #include <variant>
 
 #include <netinet/in.h>
+#include <vector>
 
 // pre define interface
 namespace interface {
@@ -63,6 +65,12 @@ struct sk_buff {
     /// next layer protocol
     uint16_t protocol;
 
+    /// device mtu and path mtu
+    uint16_t mtu;
+    
+    /// other info
+    std::any info;
+
     /// write dst 
     std::variant<uint32_t, std::array<uint8_t, def::mac_len>> dst;
 
@@ -77,6 +85,11 @@ struct sk_buff {
 
     /// stack 
     std::weak_ptr<interface::stack> stack;
+
+    /// ip fragment
+    std::weak_ptr<sk_buff> parent_frag;
+    /// children fragments
+    std::vector<sk_buff::ptr> child_frags;
 
     /// data 
     char data[0];
@@ -266,22 +279,26 @@ struct arp_hdr {
  * @copyright Copyright (c) 2024 aris All rights reserved
  */
 struct ip_hdr {
-    /// version
-    uint8_t version:4;
-    /// ip head length
-    uint8_t ip_head_len:4;
+    // /// version
+    // uint8_t version:4;
+    // /// ip head length
+    // uint8_t ip_head_len:4;
+    uint8_t version_and_head_len;
     /// diff service
-    uint8_t diff_serv:6;
-    /// ecn 
-    uint8_t ecn:2;
+    // uint8_t diff_serv:6;
+    // /// ecn 
+    // uint8_t ecn:2;
+    uint8_t diff_serv_and_ecn;
     /// ip fragment length
     uint16_t total_len;
     /// ip identification
     uint16_t identification;
-    /// ip flag
-    uint8_t flags:3;
-    /// fragment offset
-    uint16_t fragment_offset:13;
+    // /// ip flag
+    // uint8_t flags:3;
+    // /// fragment offset
+    // uint16_t fragment_offset:13;
+    /// flag and offset
+    uint16_t flag_and_fragoffset;
     /// time to live
     uint8_t time_to_live;
     /// next layer protocol
@@ -421,6 +438,21 @@ static void skb_reset(sk_buff::ptr buffer, size_t len) {
 static void skb_release(sk_buff::ptr buffer) {
     buffer.reset();
     return;
+}
+
+/**
+ * @brief copy header buffer
+ * @param[in] src source buffer
+ * @param[in] dst dst buffer
+ */
+static void skb_header_clone(sk_buff::ptr src, sk_buff::ptr dst) {
+    dst->protocol = src->protocol;
+    dst->mtu = src->mtu;
+    dst->src = src->src;
+    dst->dst = src->dst;
+    dst->key = src->key;
+    dst->dev = src->dev;
+    dst->stack = src->stack;
 }
 
 /**
