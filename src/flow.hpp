@@ -13,9 +13,9 @@
 #include <iostream>
 #include <memory>
 #include <variant>
+#include <vector>
 
 #include <netinet/in.h>
-#include <vector>
 
 // pre define interface
 namespace interface {

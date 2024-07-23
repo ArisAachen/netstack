@@ -1,7 +1,6 @@
 #include "utils.hpp"
 #include "def.hpp"
 
-#include <algorithm>
 #include <arpa/inet.h>
 #include <cstdint>
 #include <cstring>
@@ -83,6 +82,39 @@ bool convert_string_to_ip(const std::string& src_ip, uint32_t* dst_ip) {
         i++;
     }
     return true;
+}
+
+/**
+ * @brief get rol 
+ * @param[in] word num
+ * @param[in] shift shift bit
+ * @return rol result
+ */
+static uint32_t rol32(uint32_t word, unsigned int shift)
+{
+	return (word << (shift & 31)) | (word >> ((-shift) & 31));
+}
+
+/**
+ * @brief get jenkins hash
+ * @param[in] first first num
+ * @param[in] second second num
+ * @param[in] third third num
+ * @return hash result
+ */
+#define jhash_final(first, second, third)                             \
+    third ^= second; third -= rol32(second, 14);                      \
+    first ^= third; first -= rol32(third, 11);                        \
+    second ^= first; second -= rol32(first, 15);                      \
+    third ^= second; third -= rol32(second, 16);                      \
+    first ^= third; first -= rol32(third, 4);                         \
+    second ^= first; second -= rol32(first, 14);                      \
+    third ^= second; third -= rol32(second, 24);
+
+
+uint32_t jhash_3words(uint32_t first, uint32_t second, uint32_t third) {
+    jhash_final(first, second, third);
+    return third;
 }
 
 }

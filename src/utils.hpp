@@ -38,6 +38,15 @@ bool convert_string_to_mac(const std::string& src_mac, uint8_t* dst_mac);
  * @return if convert success
  */
 bool convert_string_to_ip(const std::string& src_ip, uint32_t* dst_ip);
+
+/**
+ * @brief get jenkins hash
+ * @param[in] first first num
+ * @param[in] second second num
+ * @param[in] third third num
+ * @return hash result
+ */
+uint32_t jhash_3words(uint32_t first, uint32_t second, uint32_t third);
 }
 
 

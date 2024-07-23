@@ -2,61 +2,23 @@
 #define __SOCK_H__
 
 #include "def.hpp"
+#include "utils.hpp"
 #include "flow.hpp"
 
 #include <atomic>
-#include <bitset>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <iostream>
-#include <netinet/in.h>
 #include <queue>
-#include <shared_mutex>
-#include <sys/socket.h>
 #include <unordered_map>
+#include <shared_mutex>
+
+#include <netinet/in.h>
+#include <sys/socket.h>
+
 
 namespace flow_table {
-
-/**
- * @brief get rol 
- * @param[in] word num
- * @param[in] shift shift bit
- * @return rol result
- */
-static uint32_t rol32(uint32_t word, unsigned int shift)
-{
-	return (word << (shift & 31)) | (word >> ((-shift) & 31));
-}
-
-/**
- * @brief get jenkins hash
- * @param[in] first first num
- * @param[in] second second num
- * @param[in] third third num
- * @return hash result
- */
-#define jhash_final(first, second, third)                             \
-    third ^= second; third -= rol32(second, 14);                      \
-    first ^= third; first -= rol32(third, 11);                        \
-    second ^= first; second -= rol32(first, 15);                      \
-    third ^= second; third -= rol32(second, 16);                      \
-    first ^= third; first -= rol32(third, 4);                         \
-    second ^= first; second -= rol32(first, 14);                      \
-    third ^= second; third -= rol32(second, 24);
-
-/**
- * @brief get jenkins hash
- * @param[in] first first num
- * @param[in] second second num
- * @param[in] third third num
- * @return hash result
- */
-static inline uint32_t jhash_3words(uint32_t first, uint32_t second, uint32_t third) {
-    jhash_final(first, second, third);
-    return third;
-}
 
 /**
  * @file sock.hpp
@@ -107,7 +69,7 @@ struct hash_sock_get_key {
     size_t operator() (const sock_key::ptr sock) const {
         // get port
         uint32_t port = (sock->local_port << 16) + sock->remote_port;
-        auto key = jhash_3words(sock->local_ip, sock->remote_ip, port);
+        auto key = utils::generic::jhash_3words(sock->local_ip, sock->remote_ip, port);
         return key;
     }
 };

@@ -80,7 +80,7 @@ bool udp::unpack_flow(flow::sk_buff::ptr buffer) {
     // copy message
     auto msg = std::string(buffer->get_data(), msg_len);
     std::cout << "rcv udp message, " << std::dec << remote_port << " -> " 
-        << local_port << ", msg: " << msg << std::endl;
+        << local_port << ", msg: " << "\n" << msg << std::endl;
     return true;
 }
 

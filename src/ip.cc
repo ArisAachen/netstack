@@ -5,6 +5,12 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <memory>
+#include <mutex>
+#include <shared_mutex>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 #include <iostream>
 
@@ -15,6 +21,7 @@ namespace protocol {
 
 ip::ip(interface::stack::weak_ptr stack) {
     stack_ = stack;
+    defrag_queue_ = flow_table::ip_defrag_queue::create();
 }
 
 // create ip 
@@ -51,18 +58,27 @@ bool ip::unpack_flow(flow::sk_buff::ptr buffer) {
     auto hdr = reinterpret_cast<const struct flow::ip_hdr*>(buffer->get_data());
     if (hdr == nullptr)
         return false;
-    buffer->protocol = hdr->protocol;
     std::cout << "rcv ip msg, src: " << utils::generic::format_ip_address(ntohl(hdr->src_ip))
         << ", dst: " << utils::generic::format_ip_address(ntohl(hdr->dst_ip)) 
-        << ", protocol: " << (int)(def::network_protocol(buffer->protocol)) << std::endl;
+        << ", protocol: " << (int)(def::network_protocol(hdr->protocol)) << std::endl;
+    // get protocol
+    buffer->protocol = hdr->protocol;
     // store src ip and dst ip
     buffer->src = ntohl(hdr->src_ip);
     buffer->dst = ntohl(hdr->dst_ip);
-    flow::skb_pull(buffer, sizeof(struct flow::ip_hdr));
-    // get real offset here
-    flow::skb_put(buffer, htons(hdr->total_len));
-
-    return true;
+    // get more frag
+    auto flag_and_fragoffset = ntohs(hdr->flag_and_fragoffset);
+    auto more_flag = (uint16_t)(flag_and_fragoffset >> def::ip_flag_offset & 0b001);
+    // get offset 
+    auto offset = uint16_t(flag_and_fragoffset << 3) >> 3;
+    if (!more_flag && offset == 0) {
+        std::cout << "rcv ip msg dont need defrag" << std::endl;
+        flow::skb_pull(buffer, sizeof(struct flow::ip_hdr));
+        // get real offset here
+        flow::skb_put(buffer, htons(hdr->total_len));
+        return true;
+    }
+    return ip_defragment(buffer);
 }
 
 // ip rcv 
@@ -155,5 +171,156 @@ bool ip::ip_fragment(flow::sk_buff::ptr buffer) {
 
     return true;
 };
+
+bool ip::ip_defragment(flow::sk_buff::ptr buffer) {
+    // check if find full package
+    auto defrag_buffer = defrag_queue_->defrag_push(buffer);
+    if (defrag_buffer == nullptr)
+        return false;
+    buffer = defrag_buffer;
+    return true;
+}
+
+
+}
+
+
+namespace flow_table {
+
+ip_defrag_queue::ip_defrag_queue() {
+    
+}
+
+ip_defrag_queue::ptr ip_defrag_queue::create() {
+    return ip_defrag_queue::ptr(new ip_defrag_queue());
+}
+
+flow::sk_buff::ptr ip_defrag_queue::defrag_push(flow::sk_buff::ptr buffer) {    
+    // get ip header
+    auto hdr = reinterpret_cast<const struct flow::ip_hdr*>(buffer->get_data());
+    if (hdr == nullptr)
+        return nullptr;
+    // create key 
+    auto src_ip = ntohl(hdr->src_ip);
+    auto dst_ip = ntohl(hdr->dst_ip);
+    auto id = ntohs(hdr->identification);
+    auto protocol = hdr->protocol;
+    auto flag_and_fragoffset = ntohs(hdr->flag_and_fragoffset);
+    uint16_t fragoffset = uint16_t(flag_and_fragoffset << 3) >> 3;
+    auto key = ip_defrag_key::ptr(new ip_defrag_key(src_ip, dst_ip, id, protocol));
+    auto offset_map = defrag_find(key);
+    if (offset_map == nullptr) {
+        offset_map = defrag_list_create(key);
+    }
+    // get mutex
+    std::unique_lock<std::shared_mutex> lock(mutex);
+    offset_map->insert(std::make_pair(fragoffset, buffer));
+    auto defrag_buffer = ip_defrag_reassemble(offset_map);
+    if (defrag_buffer == nullptr)
+        return nullptr;
+    lock.unlock();
+    // remove map
+    defrag_remove(key);
+    return defrag_buffer;
+}
+
+// remove defrag
+bool ip_defrag_queue::defrag_remove(ip_defrag_key::ptr key) {
+    std::lock_guard<std::shared_mutex> lock(mutex);
+    defrag_map.erase(defrag_map.find(key));
+    return false;
+}
+
+ip_defrag_queue::defrag_offset_map_ptr ip_defrag_queue::defrag_find(ip_defrag_key::ptr key) {
+    std::shared_lock<std::shared_mutex> lock(mutex);
+    auto elem = defrag_map.find(key);
+    if (elem == defrag_map.end())
+        return nullptr;
+    return elem->second;
+}
+
+// get defrag list
+ip_defrag_queue::defrag_offset_map_ptr ip_defrag_queue::defrag_list_create(ip_defrag_key::ptr key) {
+    std::lock_guard<std::shared_mutex> lock(mutex);
+    auto offset_map = defrag_offset_map_ptr(new std::unordered_map<uint16_t, flow::sk_buff::ptr>());
+    defrag_map.insert(std::make_pair(key, offset_map));
+    return offset_map;
+}
+
+// try to reassemble bufer
+flow::sk_buff::ptr ip_defrag_queue::ip_defrag_reassemble(defrag_offset_map_ptr offset_map) {
+    // try to get offset 0, if not exist, if not complete
+    auto offset_frag = offset_map->find(0);
+    if (offset_frag == offset_map->end()) {
+        std::cout << "ip first frag cant found, need more frag" << std::endl;
+        return nullptr;
+    }
+    auto full_frag = false;
+    auto total_buf_len = 0;
+    // check if recv all frag
+    while (true) {
+        auto hdr = reinterpret_cast<flow::ip_hdr*>(offset_frag->second->get_data());
+        // get frag
+        auto flag_and_fragoffset = ntohs(hdr->flag_and_fragoffset);
+        auto more_flag = flag_and_fragoffset >> def::ip_flag_offset & 0b001;
+        // get current offset
+        uint16_t offset = uint16_t(flag_and_fragoffset << 3) >> 3;
+        // get header len
+        auto header_len = (hdr->version_and_head_len & 0b00001111) * def::ip_len;
+        // get data len 
+        auto data_len = ntohs(hdr->total_len) - header_len;
+        if (more_flag == 0) {
+            full_frag = true;
+            total_buf_len = offset * def::ip_frag_offset_base + data_len;
+            std::cout << "ip rcv frag complete" << std::endl;
+            break;
+        }
+        // get next offset
+        offset += data_len / def::ip_frag_offset_base;
+        offset_frag = offset_map->find(offset);
+        if (offset_frag == offset_map->end()) {
+            std::cout << "ip rcv frag not complete, need more frag" << std::endl;
+            return nullptr;
+        }
+    }
+    // check if full frag set
+    if (!full_frag)
+        return nullptr;
+    // create buffer
+    auto reassemble_buffer = flow::sk_buff::alloc(total_buf_len);
+    reassemble_buffer->data_len = total_buf_len;
+    flow::skb_pull(reassemble_buffer, sizeof(struct flow::ip_hdr));
+    // copy buffer
+    offset_frag = offset_map->find(0);
+    // check if recv all frag
+    while (true) {
+        auto hdr = reinterpret_cast<flow::ip_hdr*>(offset_frag->second->get_data());
+        // get frag
+        auto flag_and_fragoffset = ntohs(hdr->flag_and_fragoffset);
+        // get current offset
+        uint16_t offset = uint16_t(flag_and_fragoffset << 3) >> 3;
+        // get header len
+        auto header_len = (hdr->version_and_head_len & 0b00001111) * def::ip_len;
+        auto data_len = ntohs(hdr->total_len) - header_len;
+        auto frag_buffer = offset_frag->second;
+        flow::skb_pull(frag_buffer, header_len);
+        memccpy(reassemble_buffer->get_data(), frag_buffer->get_data(), offset * def::ip_frag_offset_base, data_len);
+        // check if is last frag
+        auto more_flag = flag_and_fragoffset >> def::ip_flag_offset & 0b001;
+        if (!more_flag) {
+            reassemble_buffer->src = htonl(hdr->src_ip);
+            reassemble_buffer->dst = htonl(hdr->dst_ip);
+            std::cout << "ip rcv frag copy data complete" << std::endl;
+            return reassemble_buffer;
+        }
+        offset += data_len / def::ip_frag_offset_base;
+        offset_frag = offset_map->find(offset);
+        if (offset_frag == offset_map->end()) {
+            std::cout << "ip rcv frag copy failed" << std::endl;
+            return nullptr;
+        }
+    }
+    return nullptr;
+}
 
 }
