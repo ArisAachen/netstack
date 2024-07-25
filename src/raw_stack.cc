@@ -7,6 +7,7 @@
 #include "ip.hpp"
 #include "macvlan.hpp"
 #include "sock.hpp"
+#include "tcp.hpp"
 #include "udp.hpp"
 
 #include <array>
@@ -39,6 +40,7 @@ raw_stack::raw_stack() {
 
 // init raw_stack
 void raw_stack::init() {
+    auto tcp_handler = protocol::tcp::create(weak_from_this());
     // register macvlan device
     register_device(driver::macvlan_device::ptr(new driver::macvlan_device("new_eth0", "192.168.121.253", "f6:34:95:26:90:66")));
     // register network handler
@@ -47,6 +49,8 @@ void raw_stack::init() {
     register_network_handler(protocol::icmp::create(weak_from_this()));
     // register transport handler
     register_transport_handler(protocol::udp::create(weak_from_this()));
+    register_transport_handler(tcp_handler);
+    register_sock_handler(tcp_handler);
 }
 
 // write buffer to device
@@ -168,6 +172,7 @@ void raw_stack::handle_packege() {
                     sock->write_buffer_to_queue(buffer);
                 } else if (def::transport_protocol(buffer->protocol) == def::transport_protocol::tcp) {
                     std::cout << "current sock is tcp protocol" << std::endl;
+                    
                 }
             }
         });
@@ -273,8 +278,10 @@ raw_stack::~raw_stack() {
 // create socket 
 uint32_t raw_stack::sock_create(int domain, int type, int protocol) {
     if (type == SOCK_DGRAM) {
-       return fd_table_->fd_create(def::transport_protocol::udp); 
-    } 
+        return fd_table_->fd_create(def::transport_protocol::udp);
+    } else if (type == SOCK_STREAM) {
+        return fd_table_->fd_create(def::transport_protocol::tcp);
+    }
     return -1;
 }
 
@@ -318,8 +325,28 @@ bool raw_stack::bind(uint32_t fd, struct sockaddr* addr, socklen_t len) {
             key->local_ip = ntohl(local_addr->sin_addr.s_addr);
         key->local_port = ntohs(local_addr->sin_port);
         udp_sock_table_->sock_create(key);
+    } else if (key->protocol == def::transport_protocol::tcp) {
+        if (local_addr->sin_addr.s_addr != 0)
+            key->local_ip = ntohl(local_addr->sin_addr.s_addr);
+        key->local_port = ntohs(local_addr->sin_port);
+        // get tcp handler
+        auto sock_handler = sock_handler_map_.find(key->protocol);
+        if (sock_handler == sock_handler_map_.end())
+            return false;
+        sock_handler->second->sock_create(key);
     }
     return true;
+}
+
+// listen fd
+bool raw_stack::listen(uint32_t fd, int backlog) {
+    // get key
+    auto key = fd_table_->sock_key_get(fd);
+    if (key == nullptr)
+        return false;
+    // try to get handler
+    auto sock_handler = sock_handler_map_.find(key->protocol);
+    return false;
 }
 
 // read buffer from stack

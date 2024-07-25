@@ -49,12 +49,36 @@ void udp_server() {
     }
 }
 
+void tcp_server() {
+    // create fd 
+    int fd = sock_create(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (fd == -1) {
+        std::cout << "create fd failed" << std::endl;
+        return;
+    }
+    // create sock addr
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(struct sockaddr_in));
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(udp_listen_port);
+    // bind socket 
+    if (stack_bind(fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_in)) == -1) {
+        std::cout << "bind fd failed" << std::endl;
+        return;
+    }
+    // create read item
+    char buf[udp_buf_size];
+    while (true) {
+    }
+}
+
 int main() {
     auto stack = stack::raw_stack::get_instance();
     stack->init();
     stack->run();
 
-    udp_server();
+    // udp_server();
+    tcp_server();
 
     stack->wait();
 }

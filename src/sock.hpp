@@ -170,6 +170,11 @@ public:
     */ 
     void write_buffer_to_queue(flow::sk_buff::ptr buffer);
 
+    /**
+    * @brief release sock
+    */ 
+    virtual ~sock() {}
+
 public:
     /// sock key store src dst info
     sock_key::ptr key;
@@ -194,7 +199,7 @@ public:
     /// transport protocol
     def::transport_protocol protocol;
 
-private:
+public:
     /**
     * @brief create sock
     * @param[in] src_ip source ip
@@ -206,6 +211,13 @@ private:
 };
 
 /**
+* @brief sock clone
+* @param[in] sock source sock
+* @return sock 
+*/
+static sock::ptr sock_clone(sock::ptr sock);
+
+/**
  * @file flow.hpp
  * @brief compare if key is the same
  * @author ArisAachen
@@ -215,6 +227,7 @@ private:
 class sock_table : std::enable_shared_from_this<sock_table> {
 public:
     typedef std::shared_ptr<sock_table> ptr;
+    typedef std::weak_ptr<sock_table> weak_ptr;
 
     /**
     * @brief create sock
@@ -231,6 +244,13 @@ public:
     * @return sock 
     */
     sock::ptr sock_create(sock_key::ptr key);
+
+    /**
+    * @brief create sock
+    * @param[in] sock store sock
+    * @return sock 
+    */
+    sock_key::ptr sock_store(sock::ptr sock);
 
     /**
     * @brief get sock

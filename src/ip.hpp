@@ -147,7 +147,7 @@ struct ip_defrag_key_equal {
     }
 };
 
-struct ip_defrag_get_key {
+struct ip_defrag_hash_key {
     /**
     * @brief get jenkins hash key
     * @param[in] key id key
@@ -164,7 +164,7 @@ struct ip_defrag_queue {
 public:
     typedef std::shared_ptr<ip_defrag_queue> ptr;
     typedef std::shared_ptr<std::unordered_map<uint16_t, flow::sk_buff::ptr>> defrag_offset_map_ptr; 
-    typedef std::unordered_map<ip_defrag_key::ptr, defrag_offset_map_ptr, ip_defrag_get_key, ip_defrag_key_equal> ip_defrag_map;
+    typedef std::unordered_map<ip_defrag_key::ptr, defrag_offset_map_ptr, ip_defrag_hash_key, ip_defrag_key_equal> ip_defrag_map;
 
     /**
      * @brief create ip defrag

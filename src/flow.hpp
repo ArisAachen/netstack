@@ -2,6 +2,7 @@
 #define __FLOW_H__
 
 #include "def.hpp"
+#include "utils.hpp"
 
 #include <algorithm>
 #include <any>
@@ -384,6 +385,70 @@ struct udp_fake_hdr {
     /// total len
     uint16_t total_len;
 };
+
+/**
+ * @file flow.hpp
+ * @brief tcp header option
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ * @link https://datatracker.ietf.org/doc/html/rfc792
+ */
+struct tcp_hdr_option {
+    union {
+        /// only include otion kind
+        uint8_t kind;
+        struct {
+            /// option kind
+            uint8_t kind;
+            /// option length
+            uint8_t length;
+            /// option data
+            char data[0];
+        } expand;
+    } option;
+} __attribute__((packed));
+
+/**
+ * @file flow.hpp
+ * @brief tcp header
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ * @link https://datatracker.ietf.org/doc/html/rfc792
+ */
+struct tcp_hdr {
+    /// source port
+    uint16_t src_port;
+    /// dest port
+    uint16_t dst_port;
+    /// sequence number
+    uint32_t sequence_number;
+    /// ack number
+    uint32_t ack_number;
+#ifdef LITTLE_ENDIAN
+    /// accurate ecn
+    uint8_t ace:1;
+    /// reserve
+    uint8_t reserve:3;
+    /// tcp header len
+    uint8_t header_len:4;
+    /// fin bit
+    uint8_t fin:1;
+    /// syn bit
+    uint8_t syn:1;
+    /// reset bit
+    uint8_t reset:1;
+    /// push bit
+    uint8_t push:1;
+    /// ack bit
+    uint8_t ack:1;
+    /// urg bit
+    uint8_t urg:1;
+    /// ecn echo
+    uint8_t ece:1;
+    /// congestion window reduced
+    uint8_t cwr:1;
+#endif
+} __attribute__((packed));
 
 /**
  * @brief push buffer begin

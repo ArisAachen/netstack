@@ -149,6 +149,37 @@ void sock::write_buffer_to_queue(flow::sk_buff::ptr buffer) {
     read_cond.notify_one();
 }
 
+
+    // /// sock key store src dst info
+    // sock_key::ptr key;
+    // /// sock table
+    // std::weak_ptr<sock_table> table;
+    // /// write buffer queue
+    // std::queue<flow::sk_buff::ptr> write_queue;
+    // /// write buffer condition
+    // std::condition_variable_any write_cond;
+    // /// write share lock 
+    // std::mutex write_mutex;
+    // /// read buffer queue
+    // std::queue<flow::sk_buff::ptr> read_queue;
+    // /// read buffer condition
+    // std::condition_variable_any read_cond;
+    // /// read share lock
+    // std::mutex read_mutex;
+    // /// sock flags
+    // def::sock_op_flag flags;
+    // /// max buffer size
+    // uint32_t max_buffer_size;
+    // /// transport protocol
+    // def::transport_protocol protocol;
+
+// sock clone
+sock::ptr sock_clone(sock::ptr src_sock) {
+    // create dst sock
+    auto dst_sock = sock::ptr(new sock(nullptr, src_sock->table));
+    return dst_sock;
+}
+
 sock_table::sock_table() {
 
 }
@@ -166,6 +197,13 @@ sock::ptr sock_table::sock_create(sock_key::ptr key) {
     std::cout << "create sock, local ip: " << key->local_ip << ", local port: " << key->local_port
         << ", protocol: " << uint16_t(key->protocol) << std::endl;
     return elem;
+}
+
+// store sock
+sock_key::ptr sock_table::sock_store(sock::ptr sock) {
+    std::lock_guard<std::shared_mutex> lock(sock_mutex_);
+    sock_map_.insert(std::make_pair(sock->key, sock));
+    return sock->key;
 }
 
 // get key sock ptr

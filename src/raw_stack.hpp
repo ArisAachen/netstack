@@ -69,6 +69,14 @@ public:
     }
 
     /**
+     * @brief register sock handler to raw_stack
+     * @param[in] handler sock handler
+     */
+    virtual void register_sock_handler(interface::sock_handler::ptr handler) {
+        sock_handler_map_.insert(std::make_pair(def::transport_protocol::tcp, handler));
+    }
+
+    /**
      * @brief write to device
      * @param[in] buffer write buffer
      */
@@ -166,6 +174,14 @@ public:
     virtual bool bind(uint32_t fd, struct sockaddr* addr, socklen_t len);
 
     /**
+     * @brief listen sock fd
+     * @param[in] fd sock fd,
+     * @param[in] backlog max accept queue
+     * @return listen result
+     */ 
+    virtual bool listen(uint32_t fd, int backlog);
+
+    /**
      * @brief write buf to stack
      * @param[in] fd sock fd
      * @param[in] buf buffer
@@ -231,6 +247,8 @@ private:
     std::unordered_map<def::network_protocol, interface::network_handler::ptr> network_handler_map_;
     /// transport handler map
     std::unordered_map<def::transport_protocol, interface::transport_handler::ptr> transport_handler_map_;
+    /// sock handler map 
+    std::unordered_map<def::transport_protocol, interface::sock_handler::ptr> sock_handler_map_;
     /// device map
     std::unordered_map<uint8_t, interface::net_device::ptr> device_map_;
     /// thread vector

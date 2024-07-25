@@ -185,6 +185,53 @@ const uint8_t max_udp_header = 8 + 12;
 
 // max transport wait time
 const uint8_t max_transport_wait_time = 10;
+
+/**
+ * @file def.h
+ * @brief tcp option code
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ */
+enum class tcp_option_kind : uint8_t {
+    /// end of option
+    eol,
+    /// pand option
+    nop,
+    /// max segment size
+    mss,
+    /// windows scale 
+    scale,
+    /// sack perm
+    sack_perm,
+    /// sack data
+    sack,
+    /// timestamp
+    timestamp,
+};
+
+/**
+ * @file def.h
+ * @brief tcp connection state
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ */
+enum class tcp_connection_state {
+    none,
+    established,
+    syn_sent,
+    syn_recv,
+    fin_wait_1,
+    fin_wait_2,
+    time_wait,
+    close,
+    close_wait,
+    last_ack,
+    listen,
+    closing,
+    new_syn_recv,
+};
+
+
 }
 
 #endif // __DEF_H__

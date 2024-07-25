@@ -9,6 +9,7 @@
 #include <memory>
 #include <optional>
 
+
 namespace interface {
 
 struct net_device {
@@ -132,6 +133,92 @@ struct transport_handler {
     virtual bool unpack_flow(flow::sk_buff::ptr skb) = 0;
 };
 
+struct sock_handler {
+    typedef std::shared_ptr<sock_handler> ptr;
+
+    /**
+     * @brief create sock fd
+     * @param[in] domain sock domain,
+     * @param[in] type sock type,
+     * @param[in] protocol sock protocol,
+     * @return sock fd
+     */
+    virtual bool sock_create(std::shared_ptr<flow_table::sock_key> key) = 0;
+
+    /**
+     * @brief connect sock fd
+     * @param[in] key sock fd,
+     * @param[in] addr remote addr,
+     * @param[in] len addr len,
+     * @return sock fd
+     */
+    virtual bool connect(std::shared_ptr<flow_table::sock_key> key, struct sockaddr* addr, socklen_t len) = 0;
+
+    /**
+     * @brief close sock fd
+     * @param[in] key sock fd,
+     * @return sock fd
+     */
+    virtual bool close(std::shared_ptr<flow_table::sock_key> key) = 0;
+
+    /**
+     * @brief bind sock fd
+     * @param[in] key sock fd,
+     * @param[in] addr remote addr,
+     * @param[in] len addr len,
+     * @return sock fd
+     */
+    virtual bool bind(std::shared_ptr<flow_table::sock_key> key, struct sockaddr* addr, socklen_t len) = 0;
+
+    /**
+     * @brief accept sock fd
+     * @param[in] key sock fd,
+     * @param[in] addr remote addr,
+     * @param[in] len addr len,
+     * @return sock fd
+     */
+    virtual std::shared_ptr<flow_table::sock_key> accept(std::shared_ptr<flow_table::sock_key> key, struct sockaddr* addr, socklen_t len) = 0;
+
+    /**
+     * @brief write buf to stack
+     * @param[in] key sock fd
+     * @param[in] buf buffer
+     * @param[in] size buf len
+     * @return write size
+     */
+    virtual size_t write(std::shared_ptr<flow_table::sock_key> key, char* buf, size_t size) = 0;
+
+    /**
+     * @brief read buf from stack
+     * @param[in] key sock fd
+     * @param[in] buf buffer
+     * @param[in] size buf len
+     * @return read size
+     */
+    virtual size_t read(std::shared_ptr<flow_table::sock_key> key, char* buf, size_t size) = 0;
+
+    /**
+     * @brief read buf from stack
+     * @param[in] key sock fd
+     * @param[in] buf buffer
+     * @param[in] size buf len
+     * @param[in] addr recv addr
+     * @param[in] len addr len
+     * @return read size
+     */
+    virtual size_t readfrom(std::shared_ptr<flow_table::sock_key> key, char* buf, size_t size, struct sockaddr* addr, socklen_t* len) = 0;
+
+    /**
+     * @brief write buf to stack
+     * @param[in] key sock fd
+     * @param[in] buf buffer
+     * @param[in] size buf len
+     * @param[in] addr recv addr
+     * @param[in] len addr len
+     * @return read size
+     */
+    virtual size_t writeto(std::shared_ptr<flow_table::sock_key> key, char* buf, size_t size, struct sockaddr* addr, socklen_t len) = 0;
+};
 
 /**
  * @file interface.hpp
@@ -163,8 +250,18 @@ public:
      */
     virtual void register_network_handler(interface::network_handler::ptr handler) = 0;
 
-
+    /**
+     * @brief register transport handler to stack
+     * @param[in] device_id device id
+     * @param[in] handler network handler
+     */
     virtual void register_transport_handler(interface::transport_handler::ptr handler) = 0;
+
+    /**
+     * @brief register sock handler to raw_stack
+     * @param[in] handler sock handler
+     */
+    virtual void register_sock_handler(interface::sock_handler::ptr handler) = 0;
 
     /**
      * @brief write to device
@@ -238,6 +335,14 @@ public:
      * @return sock fd
      */
     virtual bool bind(uint32_t fd, struct sockaddr* addr, socklen_t len) = 0;
+
+    /**
+     * @brief listen sock fd
+     * @param[in] fd sock fd,
+     * @param[in] backlog max accept queue
+     * @return listen result
+     */ 
+    virtual bool listen(uint32_t fd, int backlog) = 0;
 
     /**
      * @brief write buf to stack
