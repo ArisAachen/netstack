@@ -373,7 +373,7 @@ struct udp_hdr {
  * @copyright Copyright (c) 2024 aris All rights reserved
  * @link https://datatracker.ietf.org/doc/html/rfc792
  */
-struct udp_fake_hdr {
+struct transport_fake_hdr {
     /// source ip
     uint32_t src_ip;
     /// dst ip
@@ -448,6 +448,12 @@ struct tcp_hdr {
     /// congestion window reduced
     uint8_t cwr:1;
 #endif
+    /// windows size
+    uint16_t window_size;
+    /// tcp header checksum
+    uint16_t tcp_checksum;
+    /// urg pointer
+    uint16_t urg_pointer;
 } __attribute__((packed));
 
 /**

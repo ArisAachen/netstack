@@ -45,6 +45,8 @@ bool tcp::unpack_flow(flow::sk_buff::ptr buffer) {
             sock = listen_sock_table_->sock_get(key);
         }
         auto tcp_sock = std::dynamic_pointer_cast<flow_table::tcp_sock>(sock);
+        if (tcp_sock == nullptr)
+            return false;
         tcp_sock->handle_connection(buffer);
     }
 
@@ -157,6 +159,20 @@ void tcp_sock::handle_connection(flow::sk_buff::ptr buffer) {
         resp_hdr->syn = 0b1;
         resp_hdr->ack = 0b1;
         resp_hdr->header_len = 0x5;
+        resp_hdr->window_size = def::checksum_max_num;
+        resp_hdr->tcp_checksum = 0;
+        // add fake udp header
+        flow::skb_push(resp_buffer, sizeof(struct flow::transport_fake_hdr));
+        auto fake_hdr = reinterpret_cast<flow::transport_fake_hdr*>(resp_buffer->get_data());
+        fake_hdr->src_ip = htonl(local_ip);
+        fake_hdr->dst_ip = htonl(remote_ip);
+        fake_hdr->reserve = 0;
+        fake_hdr->protocol = uint8_t(def::transport_protocol::tcp);
+        fake_hdr->total_len = htons(sizeof(struct flow::tcp_hdr));
+        // get checksum 
+        resp_hdr->tcp_checksum = htons(flow::compute_checksum(resp_buffer));
+        // drop fake header
+        flow::skb_pull(resp_buffer, sizeof(struct flow::transport_fake_hdr));
         // send stack back
         if (!stack_.expired()) {
             stack_.lock()->write_network_package(resp_buffer);

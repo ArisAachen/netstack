@@ -45,8 +45,8 @@ bool udp::pack_flow(flow::sk_buff::ptr buffer) {
     // set checksum
     hdr->udp_checksum = 0;
     // add fake udp header
-    flow::skb_push(buffer, sizeof(struct flow::udp_fake_hdr));
-    auto fake_hdr = reinterpret_cast<flow::udp_fake_hdr*>(buffer->get_data());
+    flow::skb_push(buffer, sizeof(struct flow::transport_fake_hdr));
+    auto fake_hdr = reinterpret_cast<flow::transport_fake_hdr*>(buffer->get_data());
     fake_hdr->src_ip = htonl(local_ip);
     fake_hdr->dst_ip = htonl(key->remote_ip);
     fake_hdr->reserve = 0;
@@ -55,7 +55,7 @@ bool udp::pack_flow(flow::sk_buff::ptr buffer) {
     // get checksum 
     hdr->udp_checksum = htons(flow::compute_checksum(buffer));
     // drop fake header
-    flow::skb_pull(buffer, sizeof(struct flow::udp_fake_hdr));
+    flow::skb_pull(buffer, sizeof(struct flow::transport_fake_hdr));
     buffer->data_len += sizeof(struct flow::udp_hdr);
     return true;
 }
