@@ -78,7 +78,7 @@ bool icmp::handle_icmp_echo_request(flow::sk_buff::ptr req_buffer) {
     // set icmp echo body
     icmp_echo_body->identifier = req_hdr->identifier;
     icmp_echo_body->sequence_number = req_hdr->sequence_number;
-    memccpy(icmp_echo_body->data, req_hdr->data, 0, buf_len);
+    memcpy(icmp_echo_body->data, req_hdr->data,  buf_len);
     // set icmp request hdr
     flow::skb_push(resp_buffer, sizeof(struct flow::icmp_hdr));
     auto icmp_hdr = reinterpret_cast<flow::icmp_hdr*>(resp_buffer->get_data());

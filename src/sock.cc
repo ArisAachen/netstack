@@ -36,12 +36,12 @@ size_t sock::read(char* buf, size_t size) {
     buffer->key = key;
     if (buffer->get_data_len() > size) {
         // copy data to bufer
-        memccpy(buf, buffer->get_data(), 0, size);
+        memcpy(buf, buffer->get_data(), size);
         skb_pull(buffer, size);
         return size;
     } else {
         // read all data and pop this buffer
-        memccpy(buf, buffer->get_data(), 0, buffer->get_data_len());
+        memcpy(buf, buffer->get_data(), buffer->get_data_len());
         read_queue.pop();
         return buffer->get_data_len();
     }
@@ -68,12 +68,12 @@ size_t sock::readfrom(char* buf, size_t size, struct sockaddr* addr, socklen_t* 
     *len = sizeof(struct sockaddr_in);
     if (buffer->get_data_len() > size) {
         // copy data to bufer
-        memccpy(buf, buffer->get_data(), 0, size);
+        memcpy(buf, buffer->get_data(), size);
         skb_pull(buffer, size);
         return size;
     } else {
         // read all data and pop this buffer
-        memccpy(buf, buffer->get_data(), 0, buffer->get_data_len());
+        memcpy(buf, buffer->get_data(), buffer->get_data_len());
         read_queue.pop();
         return buffer->get_data_len();
     }

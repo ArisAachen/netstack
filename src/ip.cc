@@ -153,7 +153,7 @@ bool ip::ip_fragment(flow::sk_buff::ptr buffer) {
         // set buffer
         flow::skb_reserve(frag_buffer, sizeof(struct flow::ip_hdr));
         // copy data 
-        memccpy(frag_buffer->get_data(), buffer->get_data() + index * frag_size, 0, copy_size);
+        memcpy(frag_buffer->get_data(), buffer->get_data() + index * frag_size, copy_size);
         flow::skb_put(frag_buffer, copy_size);
         // make ip header
         ip_make_flow(frag_buffer, index * frag_size / def::ip_frag_offset_base, more_flag);
@@ -304,7 +304,7 @@ flow::sk_buff::ptr ip_defrag_queue::ip_defrag_reassemble(defrag_offset_map_ptr o
         auto data_len = ntohs(hdr->total_len) - header_len;
         auto frag_buffer = offset_frag->second;
         flow::skb_pull(frag_buffer, header_len);
-        memccpy(reassemble_buffer->get_data(), frag_buffer->get_data(), offset * def::ip_frag_offset_base, data_len);
+        memcpy(reassemble_buffer->get_data(), frag_buffer->get_data(), data_len);
         // check if is last frag
         auto more_flag = flag_and_fragoffset >> def::ip_flag_offset & 0b001;
         if (!more_flag) {

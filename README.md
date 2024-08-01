@@ -7,9 +7,10 @@ use cpp new features to write a light tcp/ip stack
 ## 命令
 
 ``` shell
-sudo ip link add link enp3s0 name new_eth0 type macvlan mode bridge
+sudo ip link add new_eth0 type veth peer name new_eth1
 sudo ip link set new_eth0 address f6:34:95:26:90:66
 sudo ip link set new_eth0 up
+sudo brctl addif docker0 new_eth1
 ```
 
 ## 问题归总

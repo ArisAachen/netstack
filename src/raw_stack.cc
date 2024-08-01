@@ -42,7 +42,7 @@ raw_stack::raw_stack() {
 void raw_stack::init() {
     auto tcp_handler = protocol::tcp::create(weak_from_this());
     // register macvlan device
-    register_device(driver::macvlan_device::ptr(new driver::macvlan_device("new_eth0", "192.168.121.253", "f6:34:95:26:90:66")));
+    register_device(driver::macvlan_device::ptr(new driver::macvlan_device("new_eth0", "172.17.0.253", "f6:34:95:26:90:66")));
     // register network handler
     register_network_handler(protocol::arp::create(weak_from_this()));
     register_network_handler(protocol::ip::create(weak_from_this()));
@@ -64,7 +64,7 @@ void raw_stack::write_to_device(flow::sk_buff::ptr buffer) {
             return; 
         }
         std::array<uint8_t, def::mac_len> dst;
-        memccpy(dst.data(), neigh.value()->mac_address, 0, def::mac_len);
+        memcpy(dst.data(), neigh.value()->mac_address, def::mac_len);
         buffer->dst = dst;
     }
     if (!buffer->child_frags.empty()) {
@@ -78,7 +78,7 @@ void raw_stack::write_to_device(flow::sk_buff::ptr buffer) {
                     return; 
                 }
                 std::array<uint8_t, def::mac_len> dst;
-                memccpy(dst.data(), neigh.value()->mac_address, 0, def::mac_len);
+                memcpy(dst.data(), neigh.value()->mac_address, def::mac_len);
                 iter->dst = dst;
             }
         }

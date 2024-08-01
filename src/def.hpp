@@ -154,7 +154,8 @@ const uint32_t flow_buffer_size = 65535;
 const uint8_t broadcast_mac[mac_len] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 
 // global def ip
-const uint32_t global_def_ip = 0xc0a879fd;
+// const uint32_t global_def_ip = 0xc0a879fd;
+const uint32_t global_def_ip = 0xac1100fd;
 
 // compute checksum div base
 const uint8_t checksum_div_base = 2;

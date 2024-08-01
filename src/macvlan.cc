@@ -169,8 +169,8 @@ void macvlan_device::append_buffer_to_write_queue(const flow::sk_buff::ptr buffe
     // create ether header
     struct flow::ether_hdr* ether_hdr = reinterpret_cast<struct flow::ether_hdr*>(buffer->get_data());
     ether_hdr->protocol = htons(buffer->protocol);
-    memccpy(ether_hdr->src, mac_address_, 0, def::mac_len);
-    memccpy(ether_hdr->dst, std::get<std::array<uint8_t, def::mac_len>>(buffer->dst).data(), 0, def::mac_len);
+    memcpy(ether_hdr->src, mac_address_, def::mac_len);
+    memcpy(ether_hdr->dst, std::get<std::array<uint8_t, def::mac_len>>(buffer->dst).data(), def::mac_len);
     std::unique_lock<std::mutex> lock(write_mutex_);
     write_head_.push(buffer);
     write_cond_.notify_one();

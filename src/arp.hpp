@@ -124,7 +124,7 @@ private:
     // create 
     neighbor(uint32_t ip, const uint8_t* mac, interface::net_device::ptr dev) {
         ip_address = ip;
-        memccpy(mac_address, mac, 0, def::mac_len);
+        memcpy(mac_address, mac, def::mac_len);
         device = dev;
     }
 

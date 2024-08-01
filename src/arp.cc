@@ -83,15 +83,15 @@ bool arp::handle_arp_request(flow::sk_buff::ptr buffer) {
     auto dev = buffer->dev.lock();
     // copy source device info
     resp_hdr->src_ip = htonl(dev->get_device_ip());
-    memccpy(resp_hdr->src_mac, dev->get_device_mac(), 0, def::mac_len);
+    memcpy(resp_hdr->src_mac, dev->get_device_mac(), def::mac_len);
     // copy dst device info
     resp_hdr->dst_ip = req_hdr->src_ip;
-    memccpy(resp_hdr->dst_mac, req_hdr->src_mac, 0, def::mac_len);
+    memcpy(resp_hdr->dst_mac, req_hdr->src_mac, def::mac_len);
     // copy buffer to skb
     resp_buffer->protocol = uint16_t(def::network_protocol::arp);
     // store dst in skb
     std::array<uint8_t, def::mac_len> mac_address;
-    memccpy(mac_address.data(), req_hdr->src_mac, 0, def::mac_len);
+    memcpy(mac_address.data(), req_hdr->src_mac, def::mac_len);
     resp_buffer->dst = mac_address;
     
     // check if stack has expired
@@ -145,14 +145,14 @@ bool arp::send_arp_request(uint32_t ip, interface::net_device::ptr dev) {
     hdr->operator_code = htons(uint16_t(def::arp_op_code::request));
     // copy source device info
     hdr->src_ip = htonl(dev->get_device_ip());
-    memccpy(hdr->src_mac, dev->get_device_mac(), 0, def::mac_len);
+    memcpy(hdr->src_mac, dev->get_device_mac(), def::mac_len);
     // copy dst device info
     hdr->dst_ip = ip;
-    memccpy(hdr->dst_mac, def::broadcast_mac, 0, def::mac_len);    
+    memcpy(hdr->dst_mac, def::broadcast_mac, def::mac_len);    
     buffer->protocol = uint16_t(def::network_protocol::arp);
     // store mac to skb
     std::array<uint8_t, def::mac_len> mac_address;
-    memccpy(mac_address.data(), def::broadcast_mac, 0, def::mac_len);
+    memcpy(mac_address.data(), def::broadcast_mac, def::mac_len);
     buffer->dst = mac_address;
     // store device
     buffer->dev = dev;
