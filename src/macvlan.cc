@@ -122,6 +122,8 @@ void macvlan_device::read_thread() {
         if (!memcmp(mac_address_, hdr->dst, def::mac_len) &&
             !memcmp(def::broadcast_mac, hdr->dst, def::mac_len))
             continue;
+        std::cout << "rcv ether msg, " << utils::generic::format_mac_address(hdr->src) << " -> "
+            << utils::generic::format_mac_address(hdr->dst) << std::endl;
         // malloc flow
         flow::sk_buff::ptr skb = flow::sk_buff::alloc(size);
         // copy buffer

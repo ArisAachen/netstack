@@ -10,6 +10,7 @@ use cpp new features to write a light tcp/ip stack
 sudo ip link add new_eth0 type veth peer name new_eth1
 sudo ip link set new_eth0 address f6:34:95:26:90:66
 sudo ip link set new_eth0 up
+sudo ip link set new_eth1 up
 sudo brctl addif docker0 new_eth1
 ```
 

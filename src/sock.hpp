@@ -96,7 +96,7 @@ struct hash_sock_equal_key {
             return false;
         if (first->remote_ip != 0 && second->remote_ip != 0 && second->remote_ip != second->remote_ip)
             return false;
-        if (first->remote_port != 0 && second->remote_port != 0 && first->remote_port == second->remote_port)
+        if (first->remote_port != 0 && second->remote_port != 0 && first->remote_port != second->remote_port)
             return false;
         if (first->local_port != second->local_port)
             return false;
@@ -128,7 +128,7 @@ public:
     * @param[in] size   write size
     * @return write size
     */
-    size_t write(char* buf, size_t size);
+    virtual size_t write(char* buf, size_t size);
 
     /**
     * @brief write data to sock
@@ -138,13 +138,13 @@ public:
     * @param[in] len addr len
     * @return write size
     */
-    size_t writeto(char* buf, size_t size, struct sockaddr* addr, socklen_t len);
+   virtual size_t writeto(char* buf, size_t size, struct sockaddr* addr, socklen_t len);
 
     /**
     * @brief get buffer from write queue
     * @return queue from sock
     */
-    flow::sk_buff::ptr read_buffer_from_queue();
+    virtual flow::sk_buff::ptr read_buffer_from_queue();
 
     /**
     * @brief check if hash key is the same
@@ -152,7 +152,7 @@ public:
     * @param[in] size   write size
     * @return read data from sock
     */
-    size_t read(char* buf, size_t size);
+    virtual size_t read(char* buf, size_t size);
 
     /**
      * @brief read buf from stack
@@ -162,13 +162,13 @@ public:
      * @param[in] len addr len
      * @return read size
      */
-    size_t readfrom(char* buf, size_t size, struct sockaddr* addr, socklen_t* len);
+    virtual size_t readfrom(char* buf, size_t size, struct sockaddr* addr, socklen_t* len);
 
     /**
     * @brief write data to sock
     * @param[in] buffer write buf
     */ 
-    void write_buffer_to_queue(flow::sk_buff::ptr buffer);
+    virtual void write_buffer_to_queue(flow::sk_buff::ptr buffer);
 
     /**
     * @brief release sock

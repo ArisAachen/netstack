@@ -10,7 +10,6 @@
 #include <cstdint>
 #include <list>
 #include <memory>
-#include <queue>
 
 namespace flow_table {
     struct tcp_connection_queue;
@@ -193,7 +192,7 @@ private:
     /// listen sock table
     flow_table::sock_table::ptr listen_sock_table_;
     /// tcp sock table
-    flow_table::sock_table::ptr tcp_sock_table_;
+    flow_table::sock_table::ptr established_sock_table_;
 };
 
 }
@@ -255,11 +254,27 @@ private:
     /// tcp connection state
     def::tcp_connection_state state_;
     /// accept queue
-    std::queue<tcp_sock::ptr> accept_queue_;
+    std::list<tcp_sock::ptr> accept_queue_;
     /// syn queue
     std::list<tcp_sock::ptr> syn_list_;
     /// stack
     interface::stack::weak_ptr stack_;
+    /// sequence number
+    uint32_t sequence_number_;
+};
+
+/**
+ * @file tcp.h
+ * @brief tcp sock equal
+ * @author ArisAachen
+ * @copyright Copyright (c) 2024 aris All rights reserved
+ */
+struct tcp_sock_equal {
+    bool operator() (tcp_sock::ptr first, tcp_sock::ptr second) {
+        if (first->key == second->key) 
+            return true;
+        return false;
+    }
 };
 
 }
