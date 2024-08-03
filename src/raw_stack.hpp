@@ -182,6 +182,15 @@ public:
     virtual bool listen(uint32_t fd, int backlog);
 
     /**
+     * @brief accept sock fd
+     * @param[in] fd sock fd,
+     * @param[in] addr remote addr,
+     * @param[in] len addr len,
+     * @return sock fd
+     */
+    virtual int accept(uint32_t fd, struct sockaddr* addr, socklen_t* len);
+
+    /**
      * @brief write buf to stack
      * @param[in] fd sock fd
      * @param[in] buf buffer

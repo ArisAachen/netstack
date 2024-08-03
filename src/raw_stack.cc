@@ -344,9 +344,31 @@ bool raw_stack::listen(uint32_t fd, int backlog) {
     auto key = fd_table_->sock_key_get(fd);
     if (key == nullptr)
         return false;
+    if (key->protocol != def::transport_protocol::tcp)
+        return false;
     // try to get handler
     auto sock_handler = sock_handler_map_.find(key->protocol);
-    return false;
+    sock_handler->second->listen(key, backlog);
+    // get sock
+    return true;
+}
+
+// accept fd
+int raw_stack::accept(uint32_t fd, struct sockaddr* addr, socklen_t* len) {
+    auto key = fd_table_->sock_key_get(fd);
+    // only tcp allow to accept
+    if (key->protocol != def::transport_protocol::tcp)
+        return false;
+    auto sock_handler = sock_handler_map_.find(def::transport_protocol::tcp);
+    if (sock_handler == sock_handler_map_.end())
+        return false;
+    // get key from remote
+    auto accept_key = sock_handler->second->accept(key, addr, len);
+    // get accept key 
+    int accept_fd = fd_table_->fd_create(def::transport_protocol::tcp);
+    auto store_key = fd_table_->sock_key_get(accept_fd);
+    flow_table::sock_key_clone(accept_key, store_key);
+    return accept_fd;
 }
 
 // read buffer from stack
@@ -358,10 +380,13 @@ size_t raw_stack::read(uint32_t fd, char* buf, size_t size) {
         auto elem = udp_sock_table_->sock_get(key);
         if (elem == nullptr) {
             std::cout << "write fd failed, fd not exist, fd: " << fd << std::endl;
-            return -1; 
+            return -1;
         }
         return elem->read(buf, size);
-    } 
+    } else if (key->protocol == def::transport_protocol::tcp) {
+        auto sock_handler = sock_handler_map_.find(def::transport_protocol::tcp);
+        return sock_handler->second->read(key, buf, size);
+    }
 
     return size;
 }

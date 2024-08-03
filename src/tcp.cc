@@ -7,8 +7,11 @@
 #include <algorithm>
 #include <cstdint>
 
+#include <cstring>
 #include <memory>
+#include <mutex>
 #include <netinet/in.h>
+#include <sys/socket.h>
 
 namespace protocol {
 
@@ -41,7 +44,7 @@ bool tcp::unpack_flow(flow::sk_buff::ptr buffer) {
         << " -> " << local_port << std::endl;
     // try to get established table first
     auto established_key = flow_table::sock_key::ptr(new flow_table::sock_key(local_ip, 
-        local_port, remote_ip, remote_ip, def::transport_protocol::tcp));
+        local_port, remote_ip, remote_port, def::transport_protocol::tcp));
     auto sock = established_sock_table_->sock_get(established_key);
     if (sock == nullptr) {
         // try to get listen key
@@ -89,6 +92,12 @@ bool tcp::close(flow_table::sock_key::ptr key) {
 }
 
 bool tcp::listen(flow_table::sock_key::ptr key, int backlog) {
+    // get listen fd
+    auto sock = listen_sock_table_->sock_get(key);
+    auto tcp_sock = std::dynamic_pointer_cast<flow_table::tcp_sock>(sock);
+    if (tcp_sock == nullptr)
+        return false;
+    tcp_sock->update_connection_state(def::tcp_connection_state::listen);
     return false;
 }
 
@@ -96,11 +105,17 @@ bool tcp::bind(flow_table::sock_key::ptr key, struct sockaddr* addr, socklen_t l
     return false;
 }
 
-std::shared_ptr<flow_table::sock_key> tcp::accept(flow_table::sock_key::ptr key, struct sockaddr* addr, socklen_t len) {
+std::shared_ptr<flow_table::sock_key> tcp::accept(flow_table::sock_key::ptr key, struct sockaddr* addr, socklen_t* len) {
     auto sock = listen_sock_table_->sock_get(key);
     auto tcp_sock = std::dynamic_pointer_cast<flow_table::tcp_sock>(sock);
     auto accept_sock = tcp_sock->accept();
     established_sock_table_->sock_store(accept_sock);
+    // set addr and len
+    struct sockaddr_in* sock_addr = reinterpret_cast<struct sockaddr_in*>(addr);
+    sock_addr->sin_family = AF_INET;
+    sock_addr->sin_port = htons(accept_sock->key->remote_port);
+    sock_addr->sin_addr.s_addr = htonl(accept_sock->key->remote_ip);
+    *len = sizeof(struct sockaddr_in);
     return accept_sock->key;
 }
 
@@ -109,11 +124,17 @@ size_t tcp::write(flow_table::sock_key::ptr key, char* buf, size_t size) {
 }
 
 size_t tcp::read(flow_table::sock_key::ptr key, char* buf, size_t size) {
-    return false;
+    auto read_sock = established_sock_table_->sock_get(key);
+    if (read_sock == nullptr)
+        return -1;
+    return read_sock->read(buf, size);
 }
 
 size_t tcp::readfrom(flow_table::sock_key::ptr key, char* buf, size_t size, struct sockaddr* addr, socklen_t* len) {
-    return false;
+    auto read_sock = established_sock_table_->sock_get(key);
+    if (read_sock == nullptr)
+        return -1;
+    return read_sock->readfrom(buf, size, addr, len);
 }
 
 size_t tcp::writeto(flow_table::sock_key::ptr key, char* buf, size_t size, struct sockaddr* addr, socklen_t len) {
@@ -133,6 +154,7 @@ tcp_sock::ptr tcp_sock::create(sock_key::ptr key, sock_table::weak_ptr table, in
 tcp_sock::tcp_sock(sock_key::ptr key, sock_table::weak_ptr table, interface::stack::weak_ptr stack, tcp_sock_type type) : sock(key, table) {
     type_ = type;
     stack_ = stack;
+    state_ = def::tcp_connection_state::none;
 }
 
 void tcp_sock::handle_connection(flow::sk_buff::ptr buffer) {
@@ -149,7 +171,7 @@ void tcp_sock::handle_connection(flow::sk_buff::ptr buffer) {
     // check syn 
     if (req_hdr->syn) {
         // check if sock is in listen
-        if (type_ != tcp_sock_type::listen)
+        if (type_ != tcp_sock_type::listen || state_ != def::tcp_connection_state::listen)
             return;
         std::cout << "tcp rcv syn: " << remote_port << " -> " << local_port << std::endl;
         // create response header
@@ -202,9 +224,11 @@ void tcp_sock::handle_connection(flow::sk_buff::ptr buffer) {
             });
             // check if in syn list
             if (iter != syn_list_.end()) {
+                std::lock_guard<std::mutex> lock(sock_mutex_);
                 // erase from syn list
                 accept_queue_.push_back(*iter);
                 syn_list_.erase(iter);
+                sock_cond_.notify_one();
             } else
                 iter = std::find_if(accept_queue_.begin(), accept_queue_.end(), [dst_key](tcp_sock::ptr elem){
                     return hash_sock_equal_key()(elem->key, dst_key);
@@ -215,7 +239,8 @@ void tcp_sock::handle_connection(flow::sk_buff::ptr buffer) {
             return (*iter)->handle_connection(buffer);
         } else if (type_ == tcp_sock_type::established) {
             flow::skb_pull(buffer, sizeof(struct flow::tcp_hdr));
-            write_buffer_to_queue(buffer);
+            if (buffer->get_data_len() > 0)
+                write_buffer_to_queue(buffer);
             state_ = def::tcp_connection_state::established;
         }
         // check if need write back buffer
@@ -261,8 +286,15 @@ void tcp_sock::handle_connection(flow::sk_buff::ptr buffer) {
     }
 }
 
+// upate state
+void tcp_sock::update_connection_state(def::tcp_connection_state state) {
+    state_ = state;
+}
+
 // accept tcp sock
 tcp_sock::ptr tcp_sock::accept() {
+    std::unique_lock<std::mutex> lock(sock_mutex_);
+    sock_cond_.wait(lock, [&] { return !accept_queue_.empty(); });
     auto sock = accept_queue_.front();
     accept_queue_.pop_front();
     return sock;

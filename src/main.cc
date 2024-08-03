@@ -1,3 +1,4 @@
+#include "flow.hpp"
 #include "posix.hpp"
 #include "raw_stack.hpp"
 
@@ -57,18 +58,33 @@ void tcp_server() {
         return;
     }
     // create sock addr
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(struct sockaddr_in));
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(udp_listen_port);
+    struct sockaddr_in local_addr;
+    memset(&local_addr, 0, sizeof(struct sockaddr_in));
+    local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    local_addr.sin_port = htons(udp_listen_port);
     // bind socket 
-    if (stack_bind(fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_in)) == -1) {
+    if (stack_bind(fd, (struct sockaddr*)&local_addr, sizeof(struct sockaddr_in)) == -1) {
         std::cout << "bind fd failed" << std::endl;
         return;
     }
+    // listen socket
+    if (stack_listen(fd, 10) == -1) {
+        std::cout << "listen fd failed" << std::endl;
+        return;
+    }
+    // accept socket 
+    struct sockaddr_in remote_addr;
+    memset(&remote_addr, 0, sizeof(struct sockaddr_in));
+    socklen_t remote_len = 0;
+    int accept_fd = stack_accept(fd, (struct sockaddr*)&remote_addr, &remote_len);
+    std::cout << "accept sock success, fd: " << accept_fd 
+        << ", addr: " << utils::generic::format_ip_address(ntohl(remote_addr.sin_addr.s_addr))
+        << ":" << ntohs(remote_addr.sin_port) << std::endl;
     // create read item
     char buf[udp_buf_size];
     while (true) {
+        auto read_size = stack_read(accept_fd, buf, udp_buf_size);
+        std::cout << "user tcp read from stack success, buf: " << std::string(buf, read_size) << ", size: " << read_size << std::endl;
     }
 }
 

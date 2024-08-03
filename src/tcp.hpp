@@ -7,9 +7,11 @@
 #include "interface.hpp"
 
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <list>
 #include <memory>
+#include <mutex>
 
 namespace flow_table {
     struct tcp_connection_queue;
@@ -120,7 +122,7 @@ public:
      * @param[in] len addr len,
      * @return sock fd
      */
-    virtual std::shared_ptr<flow_table::sock_key> accept(flow_table::sock_key::ptr key, struct sockaddr* addr, socklen_t len);
+    virtual std::shared_ptr<flow_table::sock_key> accept(flow_table::sock_key::ptr key, struct sockaddr* addr, socklen_t* len);
 
     /**
      * @brief write buf to stack
@@ -234,6 +236,13 @@ typedef std::shared_ptr<tcp_sock> ptr;
     virtual void handle_connection(flow::sk_buff::ptr buffer);
 
     /**
+     * @brief update tcp connection
+     * @param[in] state sk buffer
+     * @return return if package is valid, like checksum failed
+     */
+    virtual void update_connection_state(def::tcp_connection_state state);
+
+    /**
      * @brief accept sock
      * @return return if package is valid, like checksum failed
      */
@@ -253,6 +262,10 @@ private:
     tcp_sock_type type_;
     /// tcp connection state
     def::tcp_connection_state state_;
+    /// accept queue lock
+    std::mutex sock_mutex_;
+    /// accept queue lock
+    std::condition_variable sock_cond_;
     /// accept queue
     std::list<tcp_sock::ptr> accept_queue_;
     /// syn queue

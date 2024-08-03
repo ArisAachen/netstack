@@ -104,6 +104,20 @@ struct hash_sock_equal_key {
     }
 };
 
+// clone sock key
+/**
+* @brief clone sock key
+* @param[in] src source key
+* @param[in] dst dst key
+*/
+static void sock_key_clone(sock_key::ptr src, sock_key::ptr dst) {
+    dst->local_ip = src->local_ip;
+    dst->local_port = src->local_port;
+    dst->remote_ip = src->remote_ip;
+    dst->remote_port = src->remote_port;
+    dst->protocol = src->protocol;
+}
+
 class sock_table;
 
 /**

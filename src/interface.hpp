@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <sys/socket.h>
 
 
 namespace interface {
@@ -171,13 +172,21 @@ struct sock_handler {
     virtual bool bind(std::shared_ptr<flow_table::sock_key> key, struct sockaddr* addr, socklen_t len) = 0;
 
     /**
+     * @brief listen sock fd
+     * @param[in] key sock fd,
+     * @param[in] backlog addr len,
+     * @return sock fd
+     */
+    virtual bool listen(std::shared_ptr<flow_table::sock_key> key, int backlog) = 0;
+
+    /**
      * @brief accept sock fd
      * @param[in] key sock fd,
      * @param[in] addr remote addr,
      * @param[in] len addr len,
      * @return sock fd
      */
-    virtual std::shared_ptr<flow_table::sock_key> accept(std::shared_ptr<flow_table::sock_key> key, struct sockaddr* addr, socklen_t len) = 0;
+    virtual std::shared_ptr<flow_table::sock_key> accept(std::shared_ptr<flow_table::sock_key> key, struct sockaddr* addr, socklen_t* len) = 0;
 
     /**
      * @brief write buf to stack
@@ -335,6 +344,15 @@ public:
      * @return sock fd
      */
     virtual bool bind(uint32_t fd, struct sockaddr* addr, socklen_t len) = 0;
+
+    /**
+     * @brief accept sock fd
+     * @param[in] fd sock fd,
+     * @param[in] addr remote addr,
+     * @param[in] len addr len,
+     * @return sock fd
+     */
+    virtual int accept(uint32_t, struct sockaddr* addr, socklen_t* len) = 0;
 
     /**
      * @brief listen sock fd

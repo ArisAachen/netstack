@@ -46,6 +46,23 @@ int stack_close(uint32_t fd);
 int stack_bind(uint32_t fd, struct sockaddr* addr, socklen_t len);
 
 /**
+* @brief listen sock fd
+* @param[in] fd sock fd,
+* @param[in] backlog remote addr
+* @return sock fd
+*/
+int stack_listen(uint32_t fd, int backlog);
+
+/**
+* @brief acccept sock fd
+* @param[in] fd sock fd,
+* @param[in] addr remote addr,
+* @param[in] len addr len,
+* @return sock fd
+*/
+int stack_accept(uint32_t fd, struct sockaddr* addr, socklen_t* len);
+
+/**
 * @brief write buf to stack
 * @param[in] fd sock fd
 * @param[in] buf buffer
