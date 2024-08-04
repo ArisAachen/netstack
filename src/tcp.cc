@@ -12,6 +12,7 @@
 #include <mutex>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 
 namespace protocol {
 
@@ -31,7 +32,42 @@ def::transport_protocol tcp::get_protocol() {
 }
 
 bool tcp::pack_flow(flow::sk_buff::ptr buffer) {
-    return false;
+    // get sock
+    auto sock = established_sock_table_->sock_get(buffer->key);
+    auto tcp_sock = std::dynamic_pointer_cast<flow_table::tcp_sock>(sock);
+    if (tcp_sock == nullptr)
+        return false;
+    // set buffer src and dst
+    buffer->src = buffer->key->local_ip;
+    buffer->dst = buffer->key->remote_ip;
+    auto buf_len = buffer->get_data_len();
+    // get tcp header 
+    flow::skb_push(buffer, sizeof(struct flow::tcp_hdr));
+    auto hdr = reinterpret_cast<flow::tcp_hdr*>(buffer->get_data());
+    hdr->ack_number = htonl(tcp_sock->ack_number_);
+    hdr->sequence_number = htonl(tcp_sock->sequence_number_);
+    hdr->src_port = ntohs(tcp_sock->key->local_port);
+    hdr->dst_port = ntohs(tcp_sock->key->remote_port);
+    hdr->header_len = 0x5;
+    hdr->window_size = htons(def::checksum_max_num);
+    hdr->ack = 0b1;
+    hdr->tcp_checksum = 0;
+    auto data_len = buffer->get_data_len();
+    // add fake udp header
+    flow::skb_push(buffer, sizeof(struct flow::transport_fake_hdr));
+    auto fake_hdr = reinterpret_cast<flow::transport_fake_hdr*>(buffer->get_data());
+    fake_hdr->src_ip = htonl(buffer->key->local_ip);
+    fake_hdr->dst_ip = htonl(buffer->key->remote_ip);
+    fake_hdr->reserve = 0;
+    fake_hdr->protocol = uint8_t(def::transport_protocol::tcp);
+    fake_hdr->total_len = htons(data_len);
+    // get checksum 
+    hdr->tcp_checksum = htons(flow::compute_checksum(buffer));
+    // drop fake header
+    flow::skb_pull(buffer, sizeof(struct flow::transport_fake_hdr));
+    // set sequence number
+    tcp_sock->sequence_number_ += buf_len;
+    return true;
 }
 
 bool tcp::unpack_flow(flow::sk_buff::ptr buffer) {
@@ -120,7 +156,10 @@ std::shared_ptr<flow_table::sock_key> tcp::accept(flow_table::sock_key::ptr key,
 }
 
 size_t tcp::write(flow_table::sock_key::ptr key, char* buf, size_t size) {
-    return false;
+    auto write_sock = established_sock_table_->sock_get(key);
+    if (write_sock == nullptr)
+        return -1;
+    return write_sock->write(buf, size);
 }
 
 size_t tcp::read(flow_table::sock_key::ptr key, char* buf, size_t size) {
@@ -139,6 +178,10 @@ size_t tcp::readfrom(flow_table::sock_key::ptr key, char* buf, size_t size, stru
 
 size_t tcp::writeto(flow_table::sock_key::ptr key, char* buf, size_t size, struct sockaddr* addr, socklen_t len) {
     return false;
+}
+
+flow::sk_buff::ptr tcp::read_buffer_from_queue() {
+    return established_sock_table_->read_buffer();
 }
 
 }
@@ -189,7 +232,7 @@ void tcp_sock::handle_connection(flow::sk_buff::ptr buffer) {
         resp_hdr->ack_number = htonl(ntohl(req_hdr->sequence_number) + 1);
         resp_hdr->src_port = req_hdr->dst_port;
         resp_hdr->dst_port = req_hdr->src_port;
-        resp_hdr->sequence_number = htonl(1);
+        resp_hdr->sequence_number = htonl(0);
         resp_hdr->syn = 0b1;
         resp_hdr->ack = 0b1;
         resp_hdr->header_len = 0x5;
@@ -242,6 +285,7 @@ void tcp_sock::handle_connection(flow::sk_buff::ptr buffer) {
             if (buffer->get_data_len() > 0)
                 write_buffer_to_queue(buffer);
             state_ = def::tcp_connection_state::established;
+            ack_number_ = ntohl(req_hdr->sequence_number) + buffer->get_data_len();
         }
         // check if need write back buffer
         if (buffer->get_data_len() > 0) {
@@ -261,7 +305,7 @@ void tcp_sock::handle_connection(flow::sk_buff::ptr buffer) {
             resp_hdr->ack_number = htonl(ntohl(req_hdr->sequence_number) + buffer->get_data_len());
             resp_hdr->src_port = req_hdr->dst_port;
             resp_hdr->dst_port = req_hdr->src_port;
-            resp_hdr->sequence_number = htonl(sequence_number_ + 1);
+            resp_hdr->sequence_number = htonl(sequence_number_);
             resp_hdr->ack = 0b1;
             resp_hdr->header_len = 0x5;
             resp_hdr->window_size = def::checksum_max_num;
@@ -298,6 +342,30 @@ tcp_sock::ptr tcp_sock::accept() {
     auto sock = accept_queue_.front();
     accept_queue_.pop_front();
     return sock;
+}
+
+// write 
+size_t tcp_sock::write(char* buf, size_t size) {
+    // get front
+    std::unique_lock<std::mutex> lock(write_mutex);
+    auto offset_size = 0;
+    if (key->protocol == def::transport_protocol::tcp) {
+        offset_size = flow::get_max_tcp_data_offset();
+    } else if (key->protocol == def::transport_protocol::udp) {
+        offset_size = flow::get_max_udp_data_offset();
+    }
+    // alloc buffer size
+    flow::sk_buff::ptr buffer = flow::sk_buff::alloc(offset_size + size);
+    buffer->key = key;
+    buffer->protocol = uint16_t(buffer->key->protocol);
+    buffer->mtu = 1500;
+    skb_reserve(buffer, offset_size);
+    // copy to buffer
+    buffer->store_data(buf, size);
+    flow::skb_put(buffer, size);
+    write_queue.push(buffer);
+    write_cond.notify_one();
+    return size;
 }
 
 }

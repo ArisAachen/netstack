@@ -182,7 +182,7 @@ void raw_stack::handle_packege() {
 
 // write transport package
 void raw_stack::handle_sock_buffer_package() {
-    auto thread = std::thread([&] {
+    auto udp_thread = std::thread([&] {
         while (true) {
             // read buffer from sock
             auto buffer = udp_sock_table_->read_buffer();
@@ -195,7 +195,23 @@ void raw_stack::handle_sock_buffer_package() {
                 continue;
         }
     });
-    thread_vec_.push_back(std::move(thread));
+    thread_vec_.push_back(std::move(udp_thread));
+
+    auto tcp_thread = std::thread([&] {
+        auto sock_handler = sock_handler_map_.find(def::transport_protocol::tcp);
+        while (true) {
+            // read buffer from sock
+            auto buffer = sock_handler->second->read_buffer_from_queue();
+            // maybe timeout
+            if (buffer == nullptr)
+                continue;
+            if (!write_transport_package(buffer))
+                continue;
+            if (!write_network_package(buffer))
+                continue;
+        }
+    });
+    thread_vec_.push_back(std::move(tcp_thread));
     return;
 }
 
@@ -403,7 +419,10 @@ size_t raw_stack::write(uint32_t fd, char* buf, size_t size) {
             return -1; 
         }
         return elem->write(buf, size);
-    } 
+    } else if (key->protocol == def::transport_protocol::tcp) {
+        auto sock_handler = sock_handler_map_.find(def::transport_protocol::tcp);
+        return sock_handler->second->write(key, buf, size);
+    }
 
     return size;
 }

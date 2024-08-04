@@ -227,6 +227,12 @@ struct sock_handler {
      * @return read size
      */
     virtual size_t writeto(std::shared_ptr<flow_table::sock_key> key, char* buf, size_t size, struct sockaddr* addr, socklen_t len) = 0;
+
+    /**
+    * @brief get buffer from write queue
+    * @return queue from sock
+    */
+    virtual flow::sk_buff::ptr read_buffer_from_queue() = 0;
 };
 
 /**

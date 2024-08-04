@@ -85,6 +85,8 @@ void tcp_server() {
     while (true) {
         auto read_size = stack_read(accept_fd, buf, udp_buf_size);
         std::cout << "user tcp read from stack success, buf: " << std::string(buf, read_size) << ", size: " << read_size << std::endl;
+        auto write_size = stack_write(accept_fd, buf, read_size);
+        std::cout << "user tcp write from stack success, buf: " << std::string(buf, read_size) << ", size: " << write_size << std::endl;
     }
 }
 

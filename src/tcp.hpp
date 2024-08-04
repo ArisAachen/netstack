@@ -164,6 +164,12 @@ public:
      */
     virtual size_t writeto(flow_table::sock_key::ptr key, char* buf, size_t size, struct sockaddr* addr, socklen_t len);
 
+    /**
+    * @brief get buffer from write queue
+    * @return queue from sock
+    */
+    virtual flow::sk_buff::ptr read_buffer_from_queue();
+
 private:
     /**
      * @brief create tcp with stack
@@ -243,6 +249,14 @@ typedef std::shared_ptr<tcp_sock> ptr;
     virtual void update_connection_state(def::tcp_connection_state state);
 
     /**
+    * @brief write data to sock
+    * @param[in] buf write buf
+    * @param[in] size   write size
+    * @return write size
+    */
+    virtual size_t write(char* buf, size_t size);
+
+    /**
      * @brief accept sock
      * @return return if package is valid, like checksum failed
      */
@@ -257,7 +271,7 @@ private:
      */
     tcp_sock(sock_key::ptr key, sock_table::weak_ptr table, interface::stack::weak_ptr stack, tcp_sock_type type);
 
-private:
+public:
     /// sock type 
     tcp_sock_type type_;
     /// tcp connection state
@@ -274,6 +288,8 @@ private:
     interface::stack::weak_ptr stack_;
     /// sequence number
     uint32_t sequence_number_;
+    /// ack number
+    uint32_t ack_number_;
 };
 
 /**

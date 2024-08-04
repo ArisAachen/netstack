@@ -136,8 +136,11 @@ size_t sock::write(char* buf, size_t size) {
     skb_reserve(buffer, offset_size);
     // copy to buffer
     buffer->store_data(buf, size);
+    buffer->key = key;
+    buffer->protocol = uint16_t(buffer->key->protocol);
+    buffer->mtu = 1500;
     flow::skb_put(buffer, size);
-    read_queue.push(buffer);
+    write_queue.push(buffer);
     write_cond.notify_one();
     return size;
 }
