@@ -27,3 +27,5 @@ sudo brctl addif docker0 new_eth1
 
 5. 在raw socket中读取的字节数, 无论如何都是60个字节, 如果接收的是arp请求, 那么实际可能是42字节,  
 其原因在于以太网的最小帧是64字节, 使用raw socket接收时, 移除了CRC的4个字节
+
+6. tcp作为客户端请求时, 应该注意避免sequence number重复, 或者为0, 否则会被作为重放攻击丢弃请求

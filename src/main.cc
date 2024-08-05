@@ -7,6 +7,8 @@
 
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 
 const uint16_t udp_listen_port = 8888;
 const uint16_t udp_buf_size = 512;
@@ -90,13 +92,43 @@ void tcp_server() {
     }
 }
 
+void tcp_client() {
+    sleep(10);
+    // create fd 
+    int fd = sock_create(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (fd == -1) {
+        std::cout << "create fd failed" << std::endl;
+        return;
+    }
+    // create sock addr
+    struct sockaddr_in remote_addr;
+    memset(&remote_addr, 0, sizeof(struct sockaddr_in));
+    if (inet_pton(AF_INET, "172.17.0.2", &remote_addr.sin_addr.s_addr) == -1) {
+        std::cout << " convert remote addr failed" << std::endl;
+        return;
+    }
+    remote_addr.sin_port = htons(udp_listen_port);
+    // try to connect
+    if (stack_connect(fd, (struct sockaddr*)&remote_addr, sizeof(struct sockaddr_in)) == -1) {
+        std::cout << "connect to remote failed" << std::endl;
+    }
+    std::cout << "connect to remote success" << std::endl;
+    char buf[] = "hello!";
+    while (true) {
+        stack_write(fd, buf, strlen(buf));
+        std::cout << "writ to remote success" << std::endl;
+        sleep(5);
+    }
+}
+
 int main() {
     auto stack = stack::raw_stack::get_instance();
     stack->init();
     stack->run();
 
     // udp_server();
-    tcp_server();
+    // tcp_server();
+    tcp_client();
 
     stack->wait();
 }

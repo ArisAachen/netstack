@@ -80,7 +80,7 @@ public:
      * @param[in] protocol sock protocol,
      * @return sock fd
      */
-    virtual bool sock_create(flow_table::sock_key::ptr key);
+    virtual bool sock_create(flow_table::sock_key::ptr key, def::transport_sock_type type);
 
     /**
      * @brief connect sock fd
@@ -249,6 +249,12 @@ typedef std::shared_ptr<tcp_sock> ptr;
     virtual void update_connection_state(def::tcp_connection_state state);
 
     /**
+     * @brief connect sock
+     * @return return if package is valid, like checksum failed
+     */
+    virtual bool connect();
+
+    /**
     * @brief write data to sock
     * @param[in] buf write buf
     * @param[in] size   write size
@@ -290,6 +296,8 @@ public:
     uint32_t sequence_number_;
     /// ack number
     uint32_t ack_number_;
+    /// connect wait 
+    int connect_wait_fd[2];
 };
 
 /**

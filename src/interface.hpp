@@ -144,7 +144,7 @@ struct sock_handler {
      * @param[in] protocol sock protocol,
      * @return sock fd
      */
-    virtual bool sock_create(std::shared_ptr<flow_table::sock_key> key) = 0;
+    virtual bool sock_create(std::shared_ptr<flow_table::sock_key> key, def::transport_sock_type type) = 0;
 
     /**
      * @brief connect sock fd

@@ -13,6 +13,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <thread>
@@ -40,6 +41,7 @@ raw_stack::raw_stack() {
 
 // init raw_stack
 void raw_stack::init() {
+    srand((unsigned)time(NULL));
     auto tcp_handler = protocol::tcp::create(weak_from_this());
     // register macvlan device
     register_device(driver::macvlan_device::ptr(new driver::macvlan_device("new_eth0", "172.17.0.253", "f6:34:95:26:90:66")));
@@ -315,9 +317,29 @@ bool raw_stack::sock_delete(uint32_t fd) {
     return true;
 }
 
-// 
+// connect 
 bool raw_stack::connect(uint32_t fd, struct sockaddr* addr, socklen_t len) {
-    return false;
+    // get fd table 
+    auto key = fd_table_->sock_key_get(fd);
+    if (key->protocol != def::transport_protocol::tcp)
+        return false;
+    // check if bind port 
+    if (key->local_port == 0)
+        key->local_port = rand() % def::flow_buffer_size;
+    if (key->local_ip == 0)
+        key->local_ip = def::global_def_ip;
+    // fix key
+    auto remote_addr = reinterpret_cast<sockaddr_in* >(addr);
+    auto remote_ip = ntohl(remote_addr->sin_addr.s_addr);
+    auto remote_port = ntohs(remote_addr->sin_port);
+    key->remote_ip = remote_ip;
+    key->remote_port = remote_port;
+    // get tcp handler
+    auto sock_handler = sock_handler_map_.find(key->protocol);
+    if (sock_handler == sock_handler_map_.end())
+        return false;
+    sock_handler->second->sock_create(key, def::transport_sock_type::client);
+    return sock_handler->second->connect(key, addr, len);
 }
 
 // close fd
@@ -349,7 +371,7 @@ bool raw_stack::bind(uint32_t fd, struct sockaddr* addr, socklen_t len) {
         auto sock_handler = sock_handler_map_.find(key->protocol);
         if (sock_handler == sock_handler_map_.end())
             return false;
-        sock_handler->second->sock_create(key);
+        sock_handler->second->sock_create(key, def::transport_sock_type::server);
     }
     return true;
 }

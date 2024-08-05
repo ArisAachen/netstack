@@ -7,12 +7,14 @@
 #include <algorithm>
 #include <cstdint>
 
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <mutex>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 namespace protocol {
 
@@ -112,15 +114,29 @@ bool tcp::tcp_send(flow::sk_buff::ptr buffer) {
     return false;
 }
 
-bool tcp::sock_create(flow_table::sock_key::ptr key) {
+bool tcp::sock_create(flow_table::sock_key::ptr key, def::transport_sock_type type) {
     // create listen key
-    auto tcp_sock = flow_table::tcp_sock::create(key, listen_sock_table_, stack_, flow_table::tcp_sock_type::listen);
-    listen_sock_table_->sock_store(tcp_sock);
+    if (type == def::transport_sock_type::client) {
+        auto tcp_sock = flow_table::tcp_sock::create(key, established_sock_table_, stack_, flow_table::tcp_sock_type::established);
+        tcp_sock->sequence_number_ = rand();
+        established_sock_table_->sock_store(tcp_sock);
+    } else if (type == def::transport_sock_type::server) {
+        auto tcp_sock = flow_table::tcp_sock::create(key, listen_sock_table_, stack_, flow_table::tcp_sock_type::listen);
+        listen_sock_table_->sock_store(tcp_sock);
+    }
     return false;
 }
 
 bool tcp::connect(flow_table::sock_key::ptr key, struct sockaddr* addr, socklen_t len) {
-    return false;
+    // get listen fd
+    auto sock = established_sock_table_->sock_get(key);
+    auto tcp_sock = std::dynamic_pointer_cast<flow_table::tcp_sock>(sock);
+    if (tcp_sock == nullptr)
+        return false;
+    // type
+    tcp_sock->type_ = flow_table::tcp_sock_type::established;
+    // connect to server
+    return tcp_sock->connect();
 }
 
 bool tcp::close(flow_table::sock_key::ptr key) {
@@ -203,6 +219,7 @@ tcp_sock::tcp_sock(sock_key::ptr key, sock_table::weak_ptr table, interface::sta
 void tcp_sock::handle_connection(flow::sk_buff::ptr buffer) {
     // get tcp header
     auto req_hdr = reinterpret_cast<struct flow::tcp_hdr*>(buffer->get_data());
+    auto buf_len = buffer->get_data_len() - req_hdr->header_len * 4;
     // create info 
     auto local_ip = std::get<uint32_t>(buffer->dst);
     auto remote_ip = std::get<uint32_t>(buffer->src);
@@ -212,7 +229,7 @@ void tcp_sock::handle_connection(flow::sk_buff::ptr buffer) {
     // create dst sock
     auto dst_sock = tcp_sock::create(dst_key, this->table, stack_, tcp_sock_type::established);
     // check syn 
-    if (req_hdr->syn) {
+    if (req_hdr->syn && !req_hdr->ack) {
         // check if sock is in listen
         if (type_ != tcp_sock_type::listen || state_ != def::tcp_connection_state::listen)
             return;
@@ -282,13 +299,16 @@ void tcp_sock::handle_connection(flow::sk_buff::ptr buffer) {
             return (*iter)->handle_connection(buffer);
         } else if (type_ == tcp_sock_type::established) {
             flow::skb_pull(buffer, sizeof(struct flow::tcp_hdr));
-            if (buffer->get_data_len() > 0)
+            if (buf_len > 0)
                 write_buffer_to_queue(buffer);
             state_ = def::tcp_connection_state::established;
-            ack_number_ = ntohl(req_hdr->sequence_number) + buffer->get_data_len();
+            if (req_hdr->syn)
+                ack_number_ = ntohl(req_hdr->sequence_number) + 1;
+            else
+                ack_number_ = ntohl(req_hdr->sequence_number) + buf_len;
         }
         // check if need write back buffer
-        if (buffer->get_data_len() > 0) {
+        if (buf_len > 0 || req_hdr->syn) {
             std::cout << "tcp rcv data: " << remote_port << " -> " << local_port << std::endl;
             // create response header
             auto alloc_size = sizeof(struct flow::tcp_hdr) + sizeof(struct flow::ip_hdr) + def::max_ether_header;
@@ -302,7 +322,13 @@ void tcp_sock::handle_connection(flow::sk_buff::ptr buffer) {
             flow::skb_push(resp_buffer, sizeof(struct flow::tcp_hdr));
             // get response tcp header
             auto resp_hdr = reinterpret_cast<flow::tcp_hdr*>(resp_buffer->get_data());
-            resp_hdr->ack_number = htonl(ntohl(req_hdr->sequence_number) + buffer->get_data_len());
+            uint32_t ack_number = 0;
+            if (req_hdr->syn) {
+                ack_number = ntohl(req_hdr->sequence_number) + 1;
+            } else {
+                ack_number = ntohl(req_hdr->sequence_number) + buffer->get_data_len();
+            }
+            resp_hdr->ack_number = htonl(ack_number);
             resp_hdr->src_port = req_hdr->dst_port;
             resp_hdr->dst_port = req_hdr->src_port;
             resp_hdr->sequence_number = htonl(sequence_number_);
@@ -326,6 +352,12 @@ void tcp_sock::handle_connection(flow::sk_buff::ptr buffer) {
             if (!stack_.expired()) {
                 stack_.lock()->write_network_package(resp_buffer);
             }
+            // check if is syn
+            if (req_hdr->syn && state_ == def::tcp_connection_state::established) {
+                state_ = def::tcp_connection_state::established;
+                char buf[] = "recv";
+                ::write(connect_wait_fd[1], buf, sizeof(buf));
+            }
         }
     }
 }
@@ -342,6 +374,59 @@ tcp_sock::ptr tcp_sock::accept() {
     auto sock = accept_queue_.front();
     accept_queue_.pop_front();
     return sock;
+}
+
+bool tcp_sock::connect() {
+    // check if type is established
+    if (type_ != tcp_sock_type::established)
+        return false;
+    auto alloc_size = sizeof(struct flow::tcp_hdr) + sizeof(struct flow::ip_hdr) + def::max_ether_header;
+    flow::sk_buff::ptr req_buffer = flow::sk_buff::alloc(alloc_size);
+    req_buffer->protocol = uint16_t(def::transport_protocol::tcp);
+    req_buffer->data_len = alloc_size;
+    req_buffer->src = key->local_ip;
+    req_buffer->dst = key->remote_ip;
+    // append to tcp header
+    flow::skb_reserve(req_buffer, alloc_size);
+    flow::skb_push(req_buffer, sizeof(struct flow::tcp_hdr));
+    // get response tcp header
+    auto req_hdr = reinterpret_cast<flow::tcp_hdr*>(req_buffer->get_data());
+    req_hdr->ack_number = 0;
+    req_hdr->src_port = htons(key->local_port);
+    req_hdr->dst_port = htons(key->remote_port);
+    req_hdr->sequence_number = htonl(sequence_number_);
+    req_hdr->syn = 0b1;
+    req_hdr->ack = 0;
+    req_hdr->header_len = 0x5;
+    req_hdr->window_size = def::checksum_max_num;
+    req_hdr->tcp_checksum = 0;
+    // add fake udp header
+    flow::skb_push(req_buffer, sizeof(struct flow::transport_fake_hdr));
+    auto fake_hdr = reinterpret_cast<flow::transport_fake_hdr*>(req_buffer->get_data());
+    fake_hdr->src_ip = htonl(key->local_ip);
+    fake_hdr->dst_ip = htonl(key->remote_ip);
+    fake_hdr->reserve = 0;
+    fake_hdr->protocol = uint8_t(def::transport_protocol::tcp);
+    fake_hdr->total_len = htons(sizeof(struct flow::tcp_hdr));
+    // get checksum 
+    req_hdr->tcp_checksum = htons(flow::compute_checksum(req_buffer));
+    // drop fake header
+    flow::skb_pull(req_buffer, sizeof(struct flow::transport_fake_hdr));
+    // send stack back
+    if (!stack_.expired()) {
+        stack_.lock()->write_network_package(req_buffer);
+    }
+    sequence_number_ += 1;
+    // wait here
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, connect_wait_fd) < 0) 
+        return false;
+    state_ = def::tcp_connection_state::syn_sent;
+    // wait connect result
+    char buf[4];
+    if (::read(connect_wait_fd[0], buf, 4) < 0) {
+        std::cout << "tcp wait for connect failed" << std::endl;
+    }
+    return true;
 }
 
 // write 

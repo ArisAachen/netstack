@@ -232,6 +232,11 @@ enum class tcp_connection_state {
     new_syn_recv,
 };
 
+enum class transport_sock_type {
+    none,
+    client,
+    server,
+};
 
 }
 
