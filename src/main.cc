@@ -127,8 +127,8 @@ int main() {
     stack->run();
 
     // udp_server();
-    // tcp_server();
-    tcp_client();
+    tcp_server();
+    // tcp_client();
 
     stack->wait();
 }
